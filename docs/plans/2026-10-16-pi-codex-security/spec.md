@@ -1,6 +1,6 @@
 # pi-codex-security 包实现规格(spec)
 
-> 日期:2026-10-16 | 状态:骨架已批准(门 1,2026-10-16;门 2 用例详版批准后改为:已批准)
+> 日期:2026-10-16 | 状态:已批准(门 1,2026-10-16;门 2,2026-10-16)
 > 设计依据:./design.md(已批准)
 > 流程:dev 重流程阶段 1 起草骨架,阶段 2 补全用例详版
 >
@@ -108,6 +108,8 @@ interface CsOverrideConfig {
   - Chat 协议模型(`api === "openai-completions"`):按映射表把已知 provider 的 baseUrl 换为对应 Responses 端点(首期仅智谱系:`open.bigmodel.cn/api/coding/paas/v4` → `open.bigmodel.cn/api/v1`);无映射条目 → `LlmWiringError("protocol-unsupported")`。
   - 其他协议(`anthropic-messages` 等):一律 `LlmWiringError("protocol-unsupported")`,不做任何回退。
   - 凭证解析顺序:pi auth.json → pi models.json 内联 apiKey → 环境变量(前两者路径经 agent-dir 解析,见约束节);三者皆无 → `LlmWiringError("no-credential")`。
+  - 会话模型可用(命中直连或映射)时忽略覆盖配置;仅当会话模型不可用(协议不兼容或无会话模型)才使用覆盖配置,`source="config"`。
+  - `modelOverride` 仅替换返回值 `model` 字段,provider/端点/凭证解析不变。
 - **副作用与可重入性**:纯函数,无状态,重复调用结果一致(同输入)。
 - **错误行为**:输入模型为 `null` 且无覆盖配置 → 返回 `LlmWiringError`(不抛异常);映射表命中判断失败一律返回错误对象,永不静默换 provider。
 - **pinned case**:
@@ -118,6 +120,33 @@ interface CsOverrideConfig {
   | Responses 协议直连 | api `openai-responses`,baseUrl `https://api.deepseek.com` | base_url 等于该 baseUrl,映射表未参与 | pi models.json 实测配置 |
   | 不兼容协议显式报错 | api `anthropic-messages`,无覆盖配置 | `LlmWiringError("protocol-unsupported")`,detail 含 provider 名 | cs 内嵌 Codex 0.162.1 仅支持 Responses 协议 |
   | 无凭证报错 | 三级凭证来源皆空 | `LlmWiringError("no-credential")`,detail 含补救指引 | design.md 权衡节 |
+  | 会话可用时忽略覆盖配置 | 智谱 chat 模型可用 + overrides 已配置 | `LlmWiring`,source="session" | ADR-0001 三级解析顺序 |
+  | 会话不可用启用覆盖配置 | api `anthropic-messages` + overrides 合法 | `LlmWiring`,source="config",base_url=overrides.baseUrl,model=overrides.model | ADR-0001 三级解析顺序 |
+  | modelOverride 只换模型 id | 智谱 chat 模型 + modelOverride="glm-5.3" | `LlmWiring.model`=="glm-5.3",端点解析与无 override 时相同 | design.md 目标「/model 切换即生效」+ 门 1 确认补充 |
+  | key 明文哨兵不泄漏 | 凭证 key 为哨兵串 `TESTKEY_SENTINEL_12345` | codexArgs 与 model 字段均不含哨兵串(仅 env 含) | 密钥红线(AGENTS.md) |
+
+- **覆盖声明**:
+  - **等价类矩阵**(维度 × 取值:协议 = responses / openai-completions(有映射) / openai-completions(无映射) / anthropic-messages 等其他;凭证 = auth.json / models.json 内联 / env / 无;来源 = 会话可用 / 会话不可用+覆盖配置 / 会话不可用+无覆盖;modelOverride = 有 / 无):
+
+    | 维度/组合 | 代表输入 | 期望要点 |
+    |---|---|---|
+    | responses + auth.json + 会话 + 无 override | pinned「Responses 协议直连」 | 直连,source=session |
+    | chat(有映射) + auth.json + 会话 + 无 override | pinned「智谱 chat 协议映射」 | 映射端点 |
+    | chat(无映射) + 任意凭证 + 会话 | api `openai-completions`,baseUrl 非智谱 | protocol-unsupported |
+    | 其他协议 + 任意凭证 + 会话 | pinned「不兼容协议显式报错」 | protocol-unsupported |
+    | 任意协议 + models.json 内联 + 会话 | auth.json 缺、models.json 有 key | 直连/映射同基线,key 来自 models.json |
+    | 任意协议 + env + 会话 | auth.json/models.json 缺、env 有 | 直连/映射同基线,key 来自 env |
+    | 任意协议 + 无凭证 | pinned「无凭证报错」 | no-credential |
+    | 会话可用 + 覆盖配置存在 | pinned「会话可用时忽略覆盖配置」 | source=session |
+    | 会话不可用 + 覆盖配置 | pinned「会话不可用启用覆盖配置」 | source=config |
+    | 会话不可用 + 无覆盖配置 | 无 sessionModel 且无 overrides | protocol-unsupported 或 no-credential 视缺因 |
+    | modelOverride 有 | pinned「modelOverride 只换模型 id」 | model 字段被替换 |
+  - 维度两两交叉自检:协议×来源(行 1-4,8-10)、协议×凭证(行 1-7)、来源×override(行 8,11)、凭证×override(行 11 用 auth.json)——均被矩阵行覆盖;未逐行展开的组合积由机检铁律兜底(密钥零泄漏适用于全组合)。
+  - **机检铁律**:
+    - 密钥零泄漏:全组合(矩阵行逐一构造)下,返回值除 `env` 外序列化文本不含凭证明文哨兵串(oracle:哨兵串是测试注入的可识别值,字符串扫描为逆向判定,独立于实现)。
+    - TOML 参数可逆解析:每项 `codexArgs` 经 TOML 转义规则逆向解析后等于构造前的键值对(逆方向实现,独立)。
+  - **枚举范围**:pi-ai `Api` 枚举全集(openai-responses、azure-openai-responses、openai-codex-responses、openai-completions、anthropic-messages、bedrock-converse-stream、mistral-conversations)逐一输入,断言每个值恰好命中三类分支之一(直连 / 映射 / 报错),防止未来新增协议值静默漏判。
+  - **参考实现吸收**:无前代基线(全新实现),不适用。
 
 #### loadOverrides()
 
@@ -131,6 +160,11 @@ interface CsOverrideConfig {
   | 用例 | 输入 | 期望 | 事实源 |
   |---|---|---|---|
   | 缺文件 | 不存在的路径 | null,不抛 | design 决策 #2「没有则报错」指接线失败,非配置缺失 |
+  | 合法完整配置 | `{baseUrl,model,apiKeyEnv,providerName}` 全字段 | 对象返回,字段值原样 | spec 数据结构 CsOverrideConfig |
+  | 非法 JSON | 文件内容 `{{{` | null,不抛 | 「容忍,不抛」错误行为 |
+  | 缺必填字段 | 仅 `{model}` | null | 后置条件「baseUrl 与 model 非空串」 |
+
+- **覆盖声明**:无——用例表即全量(单一 JSON 文件解析,无组合边界);机检补充:任意垃圾输入(随机字符串、空文件、超大文件)断言不抛异常,返回 null 或合法对象。
 
 ### extensions/scan-runner.ts
 
@@ -152,6 +186,15 @@ interface CsOverrideConfig {
   |---|---|---|---|
   | 非法 scope 即失败 | `{ kind: "diff", base: "" }` | 抛错,`cs` 未被 spawn(以注册表计数为证) | 参数校验规格 |
   | 句柄命令脱敏 | 正常 diff 扫描 | `handle.command` 匹配 `/\$\w+/` 且不匹配明文 key | 数据结构约束(密钥红线) |
+  | diff/workingTree/paths 命令拼装 | 三种 scope 各一次 | args 含 `--diff origin/main` / `--working-tree` / 重复 `--path` | cs scan --help 实测参数表 |
+  | mode deep 拼装 | `{ scope: paths, mode: "deep" }` | args 含 `--mode deep` | cs scan --help 实测参数表 |
+  | 并发超限 | 第 3 次 startScan(前 2 个未退) | 抛 `Error("concurrent-scan-limit")` | 数值预算(并发 ≤ 2) |
+  | 非 git 仓库 | repoPath 指向无 `.git` 目录 | 抛错,detail 含 git 指引,无产物目录残留 | 编码方向「预检 .git」 |
+
+- **覆盖声明**:
+  - **等价类矩阵**:scope(3)× mode(2)= 6 组合全枚举(diff/standard、diff/deep、workingTree/standard、workingTree/deep、paths/standard、paths/deep),每组合断言拼装 args 与期望逐一相等——矩阵行即全量,组合积已枚举。
+  - **机检铁律**:args 数组可逆拼装(还原为命令行字符串再按空白/引号规则重拆,断言与原 args 相等)——独立于构造实现;全产物文本(scanDir 下所有文件)不含 key 哨兵串。
+  - **枚举范围**:无(6 组合已全枚举)。
 
 #### getScanStatus(scanDir)
 
@@ -165,6 +208,15 @@ interface CsOverrideConfig {
   | 用例 | 输入 | 期望 | 事实源 |
   |---|---|---|---|
   | 重启恢复查询 | state.json 存在、pid 为不存活值、report.md 在 | phase `completed`,返回 reportPath | design「后台+通知」权衡节的跨会话边界 |
+  | 运行态 | state.json 存在、pid 存活 | phase `running` | 状态机规格 |
+  | 失败态 | state.json 存在、pid 死、无 report.md | phase `failed`,logTail 非空 | 状态机规格 |
+  | 目录不存在 | 不存在的 scanDir | phase `unknown`,detail 非空,不抛 | 错误行为 |
+  | logTail 截断 | 日志文件 1MB | logTail ≤ 8KB | 数值预算(8KB) |
+
+- **覆盖声明**:
+  - **等价类矩阵**:pid(活/死)× report.md(有/无)= 4 组合全枚举(state.json 存在时),每组合一行(state.json 缺失、目录不存在两个降级态另列)——矩阵行即全量。
+  - **机检铁律**:logTail 长度 ≤ 8192(对任意大小日志文件断言)——数值预算独立断言。
+  - **枚举范围**:无(4 组合已全枚举)。
 
 ### extensions/findings-parser.ts
 
@@ -183,6 +235,42 @@ interface CsOverrideConfig {
   |---|---|---|---|
   | 计数精确 | 静态 fixture:critical 1、high 2、medium 3、low 0 | counts 逐级相等,source `findings-json` | 构造 fixture(非同算法重算) |
   | 降级不抛 | 仅 report.md 存在 | `{ degraded: true, reportPath: <非null> }` | design「findings 解析降级」决策 |
+  | topFindings 排序截断 | fixture 15 条(severity 混序) | 返回 10 条,severity 降序(critical 在前) | 数值预算(top ≤ 10) |
+  | 字段缺失容错 | findings.json 条目缺 severity/evidence | 不抛,缺失字段按空,counts 不臆造 | 「不臆造」错误行为 |
+  | 三源全缺 | 空目录 | `{ degraded: true, reportPath: null }` | 错误行为 |
+
+- **覆盖声明**:
+  - **等价类矩阵**:无组合边界(单一解析路径逐级降级)——用例表即全量。
+  - **机检铁律**:counts 各级之和 == fixture 条数(守恒断言,oracle = 数 fixture 数组长度,逆向独立);返回 JSON 序列化后可 round-trip 解析(结构自洽)。
+  - **枚举范围**:无。
+
+### extensions/run-executor.ts
+
+run 工具的可执行核心:白名单判定、前台执行、输出截断、超时;独立于 pi ctx 以支持 node:test 直测。
+
+#### executeRun(command, args, opts)
+
+`executeRun(command: string, args: string[], opts?: { timeoutMs?: number }): Promise<{ exitCode: number; output: string; truncated: boolean } | RunRejected | RunTimeout>` —— 白名单内命令前台执行,输出合并截断。
+
+- **后置条件**:白名单内命令执行到退出;输出超 50KB 时截断并附 `…[截断]` 标记;exitCode 原样透传。
+- **副作用与可重入性**:前台执行,继承当前 cwd,无内部状态;重复调用独立。
+- **错误行为**:`login`/`logout`/`mcp` → `RunRejected`(附指引文案);未知命令 → `RunRejected` 并附合法命令清单;超时 → 杀进程树返回 `RunTimeout`。
+- **pinned case**:
+
+  | 用例 | 输入 | 期望 | 事实源 |
+  |---|---|---|---|
+  | info 透传 | `command: "info"` | exit 0,输出含 `sdkVersion` | cs info 实测输出 |
+  | login 拒绝 | `command: "login"` | RunRejected,detail 含「终端执行」指引 | design 非目标 #1 |
+  | mcp 拒绝 | `command: "mcp"` | RunRejected,附官方排除说明 | design 非目标 |
+  | 未知命令拒绝 | `command: "rm"` | RunRejected,附合法清单 | 错误行为 |
+  | 超时杀进程 | `opts.timeoutMs=1` + 长耗时命令 | RunTimeout,子进程树已杀 | 数值预算(超时) |
+  | 50KB 截断 | 输出 > 50KB 的命令 | `truncated: true`,输出长度 ≤ 50KB+标记 | 数值预算(50KB) |
+  | 非零退出码透传 | `command: "scan", args:["--diff","不存在的ref"]` | exitCode ≠ 0,输出含 cs 错误文本 | 错误行为(退出码透传) |
+
+- **覆盖声明**:
+  - **等价类矩阵**:无组合边界(命令 × 输出大小 × 超时正交,各维度用例已覆盖)——用例表即全量。
+  - **机检铁律**:白名单判定枚举——cs `--help` 输出的子命令全集(22 个:scan、policy、validate、patch、verify-fix、scans、findings、classify-severity、dedupe、suggest-owners、export、import、publish、bulk-scan、scan-components、install-hook、login、logout、init、info、feedback、completions、mcp、skills)逐一过判定,断言恰好 `login`/`logout`/`mcp` 三个拒绝、其余放行(防止新增子命令漏放行/漏拒绝;oracle = 与 cs --help 输出对拍,独立)。
+  - **枚举范围**:白名单枚举(见上)。
 
 ### extensions/index.ts(pi 工具)
 
@@ -199,25 +287,32 @@ interface CsOverrideConfig {
   |---|---|---|---|
   | 并发超限错误映射 | 已有 2 个活动扫描时第 3 次调用 | isError,detail 含 `concurrent-scan-limit`,无新进程 | startScan 上限规格 |
   | 接线失败错误映射 | 会话模型为 anthropic 协议、无覆盖配置 | isError,detail 含「/model 切换」与「覆盖配置」两个补救指引 | resolveLlmWiring 错误规格 |
+  | 成功返回结构化 | 正常 diff 扫描(mock cs 或 Gate B) | structuredContent 通过 ScanHandle schema 校验 | spec 数据结构 ScanHandle |
+
+- **覆盖声明**:错误映射枚举——resolveLlmWiring 全部 error reason(protocol-unsupported / no-credential / cs-missing)与 startScan 全部错误类型(非 git、cs 缺失、非法 scope、并发超限)逐一断言 isError 且 detail 非空;成功路径 1 行。组合行为由下游 seam 用例覆盖,不重复展开。
 
 #### codex_security_status.execute
 
 - **后置条件**:completed 时同时返回 reportPath 与 summary;failed 时返回 logTail;unknown 时带 detail。全部字段经 structuredContent 返回。
 - **副作用与可重入性**:只读。
 - **错误行为**:scanDir 参数非法 → isError。
-- **pinned case**:同上,组合行为,Gate B 覆盖。
-
-#### codex_security_run.execute
-
-- **后置条件**:`command` ∈ cs 子命令白名单(全部子命令,排除 `login`/`logout`/`mcp`);stdout+stderr 合并输出,超过 50KB 截断并附截断标记;退出码透传。
-- **副作用与可重入性**:前台执行,继承当前 cwd;无内部状态。
-- **错误行为**:`login`/`logout` → isError,提示终端执行;`mcp` → isError,提示官方排除扫描走 MCP;未知命令 → isError 并附合法命令清单;超时(默认 600s,参数上限 3600s)→ 杀进程树 + isError。
 - **pinned case**:
 
   | 用例 | 输入 | 期望 | 事实源 |
   |---|---|---|---|
-  | info 透传 | `command: "info"` | exit 0,stdout 含 `sdkVersion` | cs info 实测输出 |
-  | login 拒绝 | `command: "login"` | isError,detail 含「终端执行」指引 | design 非目标 #1 |
+  | completed 汇总 | mock 产物目录(findings.json 在) | structuredContent 含 reportPath 与 summary | getScanStatus + summarizeFindings 组合 |
+  | scanDir 非法 | `scanDir: "../"` | isError | 错误行为 |
+
+- **覆盖声明**:组合行为由 getScanStatus 与 summarizeFindings 用例覆盖;工具层仅错误映射,无独立组合。
+
+#### codex_security_run.execute
+
+- **后置条件**:调用 executeRun 并把结果映射为工具结果;白名单与截断语义见 executeRun。
+- **副作用与可重入性**:前台执行,继承 cwd;无内部状态。
+- **错误行为**:RunRejected/RunTimeout → isError 附指引;参数 schema 违例由 TypeBox 拦截。
+- **pinned case**:组合行为(= executeRun + 错误映射),无独立用例;由 executeRun 用例 + Gate B 覆盖。
+
+- **覆盖声明**:无独立组合,见 executeRun。
 
 #### /security-scan 命令
 
@@ -238,6 +333,8 @@ interface CsOverrideConfig {
 - `extensions/scan-runner.ts.getScanStatus` — seam。
 - `extensions/scan-runner.ts.activeScans` — 非 seam — 模块级 Map;重用语义:扫描进程 exit 后条目保留至 status 确认终态,新会话加载时清空(以 state.json 为准恢复,不迁移)。
 - `extensions/findings-parser.ts.summarizeFindings` — seam。
+- `extensions/run-executor.ts.executeRun` — seam(门 2 详版化时新增,见变更记录)。
+- `extensions/run-executor.ts.CS_SUBCOMMAND_WHITELIST` — 非 seam — 模块级只读常量(全子命令清单 + 拒绝集);重用语义:不可变。
 - `package.json` `pi` 清单声明 — 非 seam — 声明 extensions/skills 目录,无逻辑。
 
 ## 非 seam 模块与视觉验收
@@ -299,4 +396,6 @@ interface CsOverrideConfig {
 
 ## 变更记录
 
-- 无
+- run 执行逻辑独立为 run-executor 模块(门 2 详版化时补充)
+  - 原因:run.execute 的白名单/截断/超时是可测逻辑,内联 index.ts 装配层则无法被 node:test 直测;独立 seam 支持全部用例与枚举机检
+  - 影响:接口面穷举清单新增 `run-executor.ts.executeRun` 与 `CS_SUBCOMMAND_WHITELIST`;不触及 design.md 决策(模块划分属实现层,design 鸟瞰「index.ts 装配层薄封装」语义不变)

@@ -333,7 +333,7 @@ run 工具的可执行核心:白名单判定、前台执行、输出截断、超
 - `extensions/scan-runner.ts.startScan` — seam。
 - `extensions/scan-runner.ts.getScanStatus` — seam。
 - `extensions/scan-runner.ts.activeScans` — 非 seam — 模块级 Map;重用语义:扫描进程 exit 后条目保留至 status 确认终态,新会话加载时清空(以 state.json 为准恢复,不迁移)。
-- `extensions/findings-parser.ts.summarizeFindings` — seam。
+- `extensions/findings-parser.ts.summarizeFindings` — seam(签名含可注入 `csFindingsProvider`,见变更记录)。
 - `extensions/run-executor.ts.executeRun` — seam(门 2 详版化时新增,见变更记录)。
 - `extensions/run-executor.ts.CS_SUBCOMMAND_WHITELIST` — 非 seam — 模块级只读常量(全子命令清单 + 拒绝集);重用语义:不可变。
 - `package.json` `pi` 清单声明 — 非 seam — 声明 extensions/skills 目录,无逻辑。
@@ -401,6 +401,11 @@ run 工具的可执行核心:白名单判定、前台执行、输出截断、超
   - 原因:cs 对 `--output-dir` 硬性要求目录为空(exit 2「Scan output directory is not empty」),同目录预写 state.json 必然失败;`--archive-existing` 会把 state.json 移出 scanDir 破坏跨会话恢复;pipe 中转破坏 detached 存活——已批准的「单层同目录」无确定性解
   - 处置:startScan 改双层——scanDir(`<ts>-<pid>` 下落 state.json 与日志)+ 空 artifacts/ 子目录经 `--output-dir` 传入(产物落 artifacts/);getScanStatus 的 reportPath 改 `<scanDir>/artifacts/report.md`(已实测 cs exit 0、产物齐全、state.json 原样保留)
   - 同时:ScanStatus 增加可选 `detail?: string`——修复 spec 内部不一致(pinned case 4 要求 unknown 时 detail 非空,类型未列该字段)
+
+- summarizeFindings 签名扩展 csFindingsProvider(任务 3 实现期,controller 批准 2026-10-16)
+  - 原因:spec 编码方向第一级「cs findings --json」在 hermetic 测试下不可直测;任务简报要求落地为可注入 provider(默认 undefined 跳过,手解析为默认路径)
+  - 处置:签名扩为 `summarizeFindings(scanDir, opts?: { csFindingsProvider?: () => Promise<unknown> })`,pinned 表新增 3 条 provider 桩用例;FindingSummary.source 的 "report-md" 值在成功路径不可达(findings.json 不可解析时走 degraded 不返回伪 summary,controller 裁决),类型保留两值、模块头注明
+  - 影响:接口面穷举清单同名条目签名更新;不触及 design 决策
 
 - 产物路径机制精确回退(任务 2 派发前,用户批准 2026-10-16)
   - 原因:cs 默认产物目录名随机(`codex-security-<repo>-<随机6位>`,两次 --mock 实测验证),startScan 无法在 spawn 时得知 scanDir,与本文件「立即返回句柄 + state.json 与产物同目录」契约冲突;design.md 原「不重定向 --output-dir」属过度具体条款,已精确回退

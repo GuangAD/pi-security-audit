@@ -177,7 +177,7 @@ interface CsOverrideConfig {
 - **后置条件**:
   - 返回时子进程已启动(或 spawn 同步失败已抛出);`scanDir`、`statePath`、`logPath` 均为已存在的绝对路径。
   - `state.json` 已原子写入,`commandRedacted` 中环境变量引用形如 `$ZAI_CS_KEY`。
-  - spawn 参数含 `--headless` 与 wiring 的全部 `--codex` 参数;不携带 `--output-dir`。
+  - spawn 参数含 `--headless`、wiring 的全部 `--codex` 参数、`--output-dir <startScan 选定的唯一目录>`(cs state 体系内、仓库外)。
 - **副作用与可重入性**:每调用创建一个新产物目录与新进程;活动扫描数达上限 2 时拒绝并抛 `Error("concurrent-scan-limit")`。进程 exit 回调登记在模块级注册表,`session_shutdown` 只解除注册表引用、不杀进程。
 - **错误行为**:`repoPath` 非 git 仓库、cs 不在 PATH、scope 非法(base 空串等)→ 抛 `Error`,错误消息可读且不含密钥;不产生半初始化产物目录。
 - **pinned case**:
@@ -388,13 +388,17 @@ run 工具的可执行核心:白名单判定、前台执行、输出截断、超
 
 ### 已知的坑
 
-- cs `--output-dir` 官方强制仓库外:不传该参数,使用默认 state dir。
+- cs `--output-dir` 官方强制仓库外:选定目录须在 cs state 体系内(`CODEX_HOME`/`~/.codex` 下),不得指向仓库内;每次扫描唯一目录(时间戳+pid),startScan 先 mkdir 再 spawn。
 - GLM 对 Codex effort 档位(默认 xhigh)的兼容性未实测:Gate A 用 `--dry-run`/`--mock` 验证,失败降档固化进 wiring。
 - `auth.json`/`models.json` 是 pi 内部格式:读取逻辑集中在 llm-wiring,读不到降级 `ZAI_API_KEY`。
 - Windows 下 `detached` 与 PATH 解析:cs 的 `.cmd` 垫片需 `shell: true` 或解析真实入口,实现时以 Gate B 实测为准。
 - `--diff` 依赖 git 仓库:startScan 预检 `.git` 存在性,失败给可读错误。
 
 ## 变更记录
+
+- 产物路径机制精确回退(任务 2 派发前,用户批准 2026-10-16)
+  - 原因:cs 默认产物目录名随机(`codex-security-<repo>-<随机6位>`,两次 --mock 实测验证),startScan 无法在 spawn 时得知 scanDir,与本文件「立即返回句柄 + state.json 与产物同目录」契约冲突;design.md 原「不重定向 --output-dir」属过度具体条款,已精确回退
+  - 处置:design.md 技术栈/权衡/架构图三处同步修订;startScan 改为选定唯一目录(cs state 体系内、仓库外)经 `--output-dir` 传入;startScan 后置条件与已知的坑同步更新
 
 - modelOverride 用例验收归属澄清(任务 1 实现期)
   - 原因:resolveLlmWiring 签名 `(sessionModel, overrides)` 无 modelOverride 参数,pinned case「modelOverride 只换模型 id」无法在该 seam 兑现

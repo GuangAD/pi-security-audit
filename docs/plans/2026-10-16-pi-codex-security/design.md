@@ -68,7 +68,7 @@ graph LR
     C --> D[llm-wiring]
     D --> E[pi 配置: getModel / auth.json / models.json / 覆盖配置文件]
     C --> F[scan-runner spawn cs scan --headless]
-    F --> G[(cs 默认 state dir: 产物 + state.json)]
+    F --> G[("cs state 体系: --output-dir 选定目录(产物 + state.json)")]
     F -->|exit| H[index: sendUserMessage 完成通知]
     H --> I[agent 解读]
     I --> J[codex_security_status]
@@ -84,7 +84,7 @@ graph LR
 - 外部运行时依赖:cs CLI ≥ 0.3.0 在 PATH;缺失时工具返回可读错误,不尝试安装。
 - 目标平台:Windows / macOS / Linux(pi 本身跨平台);路径拼接一律 `node:path`,不手拼分隔符。
 - 密钥红线:API key 只存在于进程环境变量传递链,禁止出现在命令行参数、日志、落盘文件、错误消息。
-- 扫描产物统一用 cs 默认 state dir(官方强制仓库外),本包不重定向 `--output-dir`。
+- 扫描产物一律落在仓库外:每次扫描由 `startScan` 在 cs state 目录体系(`CODEX_HOME`/`~/.codex` 下)内选定唯一目录,经官方 `--output-dir` 传入。(精确回退,2026-10-16 用户批准:原「不重定向 --output-dir、用默认 state dir」与「立即返回句柄」契约冲突——默认目录名随机不可预测,实测验证。)
 
 ## 权衡
 
@@ -92,7 +92,7 @@ graph LR
 - 「专项工具精包装 + 通用执行器透传」的全覆盖架构:见 [ADR-0002](../../docs/adr/0002-specialized-tools-plus-passthrough.md)。
 - 凭证自动读 pi 配置(auth.json / models.json):零配置是用户明确要求;代价是依赖 pi 内部文件格式,升级可能变化——`llm-wiring` 读不到 key 时降级为读环境变量 `ZAI_API_KEY`,再读不到报可读错误。该依赖风险被隔离在 `llm-wiring.ts` 单模块内。
 - 后台 + 完成通知(而非同步):扫描时长不可控(分钟级到小时级);`detached` 进程脱离 pi 会话存活,重启后凭 state.json 恢复查询。代价是通知依赖 pi 会话存活,跨会话完成只能靠用户主动 `status` 查询——skill 已写明该边界。
-- 产物用 cs 默认 state dir(而非仓库内 .tmp):官方 `--output-dir` 明确要求仓库外,默认值零成本合规;报告路径由 status 工具返回,用户不需要自己找。
+- 产物一律仓库外且路径可预知:`startScan` 为每次扫描在 cs state 体系内选定唯一目录(时间戳+pid),经官方 `--output-dir` 传入——立即句柄、state.json 同目录、跨会话恢复全部成立。原「用 cs 默认 state dir(不重定向)」已于 2026-10-16 精确回退:默认目录名随机,无法满足立即句柄契约(实测 `codex-security-<repo>-<随机6位>`)。
 - 并发扫描上限定为 2:扫描是重任务,叠加会撑爆积分与机器;2 允许「分支 + 工作树」并行对比场景。机检方案见 spec.md 数值预算节。
 
 ## 开放问题

@@ -25,7 +25,7 @@ TDD waiver 预登记:
 <!-- 进度标记:完成一个勾一个并回填 commit 短哈希;恢复时从第一个未勾选处继续 -->
 
 - [x] 任务 1:llm-wiring——LLM 接线模块(commit: 6eb838a )
-- [ ] 任务 2:scan-runner——扫描进程生命周期(commit: ____ )
+- [x] 任务 2:scan-runner——扫描进程生命周期(commit: f3f1b73 )
 - [ ] 任务 3:findings-parser——产物解析摘要(commit: ____ )
 - [ ] 任务 4:run-executor + index 装配——工具层与包骨架(commit: ____ )
 - [ ] 任务 5:SKILL.md + Gate A/B/C 验证(commit: ____ )
@@ -127,3 +127,12 @@ TDD waiver 预登记:
     1. Gate A 固化命令模板:cs scan <repo> --headless --codex model_provider="<p>" --codex model_providers.<p>.{base_url,wire_api="responses",env_key}=... --model <id>;key 只经 env;--effort 不进 codexArgs,GLM 对 xhigh 的 LLM 侧接受性留任务 5 Gate B 确认,拒绝则命令层 --effort high 降档。
     2. index.ts 装配只需 resolveLlmWiring(pi.getModel(), loadOverrides()),错误 detail 原样呈现即满足契约;测试 harness(agent-dir mock、凭证 env 存取、TOML 逆解析器)可复制给任务 3/4。
     3. pi-ai Api 七值枚举已验证每值恰命中直连/映射/报错之一,新增协议值静默漏判有测试兜底。
+- 任务 2 | 完成 | commit f3f1b73
+  - BASE:08138a3(中途两次设计精确回退修订:adfef3a 产物路径、876d81e 双层目录+detail,均已用户/权限内裁决并登记 spec 变更记录)
+  - 评审:reviewer 独立评审「修复后放行」——Important 1 条(stdio 管道威胁跨会话存活契约)+ Minor 5 条(summary 字段归属任务 4;脱敏双保险对含引号 env 值失效;createScanDir TOCTOU;测试 trackedChildren 死代码;死 pid 复用窗口假设)。Important 已修(fd 直传 stdio)+ 守卫用例 + mutation check(回退管道版守卫转红,还原绿),收窄复审通过无必修项。
+  - 实现形态说明:implementer 两次 30 分钟超时(第一次全部预算耗在实证研究;第二次落盘后仍有 9 红),controller 按 fallback 会话内收尾:修复 3 处测试 bug(fixture 垫片 \\f 转义、真实 cs.cmd 测试 PATH 剥离、铁律1 前缀断言口径)+ 补写 getScanStatus 整组测试(6 条)+ Important 修复。生产代码 scan-runner.ts 主体出自 implementer。
+  - 结论:
+    1. cs 启动一律走垫片解析直 spawn(win32):shell:true 会吃 --codex TOML 引号,已在首份简报实测固化;parseNpmShimEntry 对真实 npm 形态(`%dp0%\...` 带显式反斜杠)解析,fixture 同形态。
+    2. 产物双层:scanDir 根落 state.json+scan.log,artifacts/ 空目录经 --output-dir 传 cs(cs 拒绝非空 --output-dir,exit 2);getScanStatus 的 report.md 判定走 <scanDir>/artifacts/report.md。
+    3. 跨会话契约的实现要点:stdio 直传 fd(非管道)、detached+unref、pid 落盘、session_shutdown 只清注册表——守卫测试已钉住「父进程退出后子进程日志仍完整」。
+    4. 假 cs fixture 模式(PATH 前置垫片 + 捕获 argv JSON + FAKE_CS_* 环境变量族)已成体系,任务 4 的 run-executor 测试可直接复用。

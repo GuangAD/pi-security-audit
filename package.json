@@ -1,0 +1,11 @@
+{
+  "name": "pi-codex-security",
+  "version": "0.1.0",
+  "description": "在 pi 中全功能调用 codex-security 安全扫描",
+  "type": "module",
+  "keywords": ["pi-package"],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  }
+}

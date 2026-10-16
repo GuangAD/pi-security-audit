@@ -53,8 +53,9 @@ interface ScanStatus {
   phase: "running" | "completed" | "failed" | "unknown";
   pidAlive: boolean;
   logTail?: string;           // ≤ 8KB
-  reportPath?: string;        // report.md 绝对路径(completed 时)
+  reportPath?: string;        // <scanDir>/artifacts/report.md 绝对路径(completed 时)
   summary?: FindingSummary;   // completed 且解析成功时
+  detail?: string;            // unknown/failed 时的补充说明
 }
 
 /** findings 摘要 */
@@ -177,7 +178,7 @@ interface CsOverrideConfig {
 - **后置条件**:
   - 返回时子进程已启动(或 spawn 同步失败已抛出);`scanDir`、`statePath`、`logPath` 均为已存在的绝对路径。
   - `state.json` 已原子写入,`commandRedacted` 中环境变量引用形如 `$ZAI_CS_KEY`。
-  - spawn 参数含 `--headless`、wiring 的全部 `--codex` 参数、`--output-dir <startScan 选定的唯一目录>`(cs state 体系内、仓库外)。
+  - spawn 参数含 `--headless`、wiring 的全部 `--codex` 参数、`--output-dir <scanDir 下唯一空产物子目录>`(cs state 体系内、仓库外;产物落该子目录,state.json 与日志落 scanDir 根)。
 - **副作用与可重入性**:每调用创建一个新产物目录与新进程;活动扫描数达上限 2 时拒绝并抛 `Error("concurrent-scan-limit")`。进程 exit 回调登记在模块级注册表,`session_shutdown` 只解除注册表引用、不杀进程。
 - **错误行为**:`repoPath` 非 git 仓库、cs 不在 PATH、scope 非法(base 空串等)→ 抛 `Error`,错误消息可读且不含密钥;不产生半初始化产物目录。
 - **pinned case**:
@@ -200,7 +201,7 @@ interface CsOverrideConfig {
 
 `getScanStatus(scanDir: string): Promise<ScanStatus>` —— 凭产物目录查询扫描状态,不依赖内存注册表(支持会话重启后查询)。
 
-- **后置条件**:`state.json` 存在时,`phase` 由「pid 存活探测 + report.md 存在性」唯一决定:pid 活 → running;pid 死且 report.md 在 → completed;pid 死且 report.md 不在 → failed;`state.json` 缺失 → unknown。`logTail` 不超过 8KB。
+- **后置条件**:`state.json` 存在时,`phase` 由「pid 存活探测 + `<scanDir>/artifacts/report.md` 存在性」唯一决定:pid 活 → running;pid 死且该 report.md 在 → completed;pid 死且不在 → failed;`state.json` 缺失 → unknown。`logTail` 不超过 8KB。
 - **副作用与可重入性**:只读;重复调用一致(进程状态变化除外)。
 - **错误行为**:目录不存在 → 返回 `unknown` 并带 detail,不抛。
 - **pinned case**:
@@ -395,6 +396,11 @@ run 工具的可执行核心:白名单判定、前台执行、输出截断、超
 - `--diff` 依赖 git 仓库:startScan 预检 `.git` 存在性,失败给可读错误。
 
 ## 变更记录
+
+- 产物目录双层结构与 ScanStatus.detail(任务 2 实测裁决,controller 批准 2026-10-16)
+  - 原因:cs 对 `--output-dir` 硬性要求目录为空(exit 2「Scan output directory is not empty」),同目录预写 state.json 必然失败;`--archive-existing` 会把 state.json 移出 scanDir 破坏跨会话恢复;pipe 中转破坏 detached 存活——已批准的「单层同目录」无确定性解
+  - 处置:startScan 改双层——scanDir(`<ts>-<pid>` 下落 state.json 与日志)+ 空 artifacts/ 子目录经 `--output-dir` 传入(产物落 artifacts/);getScanStatus 的 reportPath 改 `<scanDir>/artifacts/report.md`(已实测 cs exit 0、产物齐全、state.json 原样保留)
+  - 同时:ScanStatus 增加可选 `detail?: string`——修复 spec 内部不一致(pinned case 4 要求 unknown 时 detail 非空,类型未列该字段)
 
 - 产物路径机制精确回退(任务 2 派发前,用户批准 2026-10-16)
   - 原因:cs 默认产物目录名随机(`codex-security-<repo>-<随机6位>`,两次 --mock 实测验证),startScan 无法在 spawn 时得知 scanDir,与本文件「立即返回句柄 + state.json 与产物同目录」契约冲突;design.md 原「不重定向 --output-dir」属过度具体条款,已精确回退

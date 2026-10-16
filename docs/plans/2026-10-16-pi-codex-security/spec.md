@@ -396,6 +396,9 @@ run 工具的可执行核心:白名单判定、前台执行、输出截断、超
 
 ## 变更记录
 
+- modelOverride 用例验收归属澄清(任务 1 实现期)
+  - 原因:resolveLlmWiring 签名 `(sessionModel, overrides)` 无 modelOverride 参数,pinned case「modelOverride 只换模型 id」无法在该 seam 兑现
+  - 处置:替换逻辑归 scan 工具层(任务 4)兑现并测试;resolveLlmWiring 以函数 arity 边界测试固化签名;后置条件「仅替换 model 字段」语义不变
 - run 执行逻辑独立为 run-executor 模块(门 2 详版化时补充)
   - 原因:run.execute 的白名单/截断/超时是可测逻辑,内联 index.ts 装配层则无法被 node:test 直测;独立 seam 支持全部用例与枚举机检
   - 影响:接口面穷举清单新增 `run-executor.ts.executeRun` 与 `CS_SUBCOMMAND_WHITELIST`;不触及 design.md 决策(模块划分属实现层,design 鸟瞰「index.ts 装配层薄封装」语义不变)

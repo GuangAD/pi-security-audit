@@ -44,5 +44,5 @@ dev 重流程(heavy track)进行中:门 1 已批准(2026-10-16),当前处于阶�
 ## 验证入口
 
 - 加载:`pi -e ./`(一次性试用,无报错即通过)。
-- 单测:`node --test extensions/`(node:test,覆盖 spec 全部 pinned case 与数值预算)。
+- 单测:`node --test extensions/*.test.ts`(node:test,覆盖 spec 全部 pinned case 与数值预算;目录形式 `node --test extensions/` 在本机 Node v24 不可用,已实测修正)。
 - Gate A:LLM 接线实测(cs `--dry-run` / `--mock`);Gate B:包集成(pi 加载 + 工具全链路);Gate C:自然语言路由与汇报纪律。

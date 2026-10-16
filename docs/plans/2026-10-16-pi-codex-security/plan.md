@@ -24,7 +24,7 @@ TDD waiver 预登记:
 
 <!-- 进度标记:完成一个勾一个并回填 commit 短哈希;恢复时从第一个未勾选处继续 -->
 
-- [ ] 任务 1:llm-wiring——LLM 接线模块(commit: ____ )
+- [x] 任务 1:llm-wiring——LLM 接线模块(commit: 6eb838a )
 - [ ] 任务 2:scan-runner——扫描进程生命周期(commit: ____ )
 - [ ] 任务 3:findings-parser——产物解析摘要(commit: ____ )
 - [ ] 任务 4:run-executor + index 装配——工具层与包骨架(commit: ____ )
@@ -118,4 +118,12 @@ TDD waiver 预登记:
 
 ## 开发记录
 
-(每完成一个任务追加一块:ledger 首行 + 字段缩进子行;格式见计划模板说明)
+- 任务 1 | 完成 | commit 6eb838a
+  - BASE:73aff41
+  - 评审:reviewer 独立评审放行,3 Minor 记录在案(auth.json 条目不校验 type 字段;映射按主机名不校验路径,spec 固有语义;铁律1矩阵少 2 个构造组合,实质充分)。首次 reviewer 派发 30 分钟超时被杀(默认模型过慢),重试用 glm-5.3-flash:low + 收窄阅读范围成功——后续任务派评审直接带此经验。
+  - waiver:批 F 覆盖声明类测试(枚举/铁律)基于已实现行为首跑即绿,属性质测试而非缺陷复现,未补造红态;与 TDD vertical slice 纪律一致性由 controller 认可。
+  - 变更记录:已登记(modelOverride 用例验收归属移至任务 4)
+  - 结论:
+    1. Gate A 固化命令模板:cs scan <repo> --headless --codex model_provider="<p>" --codex model_providers.<p>.{base_url,wire_api="responses",env_key}=... --model <id>;key 只经 env;--effort 不进 codexArgs,GLM 对 xhigh 的 LLM 侧接受性留任务 5 Gate B 确认,拒绝则命令层 --effort high 降档。
+    2. index.ts 装配只需 resolveLlmWiring(pi.getModel(), loadOverrides()),错误 detail 原样呈现即满足契约;测试 harness(agent-dir mock、凭证 env 存取、TOML 逆解析器)可复制给任务 3/4。
+    3. pi-ai Api 七值枚举已验证每值恰命中直连/映射/报错之一,新增协议值静默漏判有测试兜底。

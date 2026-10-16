@@ -26,7 +26,7 @@ TDD waiver 预登记:
 
 - [x] 任务 1:llm-wiring——LLM 接线模块(commit: 6eb838a )
 - [x] 任务 2:scan-runner——扫描进程生命周期(commit: f3f1b73 )
-- [ ] 任务 3:findings-parser——产物解析摘要(commit: ____ )
+- [x] 任务 3:findings-parser——产物解析摘要(commit: 13f7fbd )
 - [ ] 任务 4:run-executor + index 装配——工具层与包骨架(commit: ____ )
 - [ ] 任务 5:SKILL.md + Gate A/B/C 验证(commit: ____ )
 
@@ -136,3 +136,11 @@ TDD waiver 预登记:
     2. 产物双层:scanDir 根落 state.json+scan.log,artifacts/ 空目录经 --output-dir 传 cs(cs 拒绝非空 --output-dir,exit 2);getScanStatus 的 report.md 判定走 <scanDir>/artifacts/report.md。
     3. 跨会话契约的实现要点:stdio 直传 fd(非管道)、detached+unref、pid 落盘、session_shutdown 只清注册表——守卫测试已钉住「父进程退出后子进程日志仍完整」。
     4. 假 cs fixture 模式(PATH 前置垫片 + 捕获 argv JSON + FAKE_CS_* 环境变量族)已成体系,任务 4 的 run-executor 测试可直接复用。
+- 任务 3 | 完成 | commit 13f7fbd
+  - BASE:cf83127
+  - 评审:reviewer 独立评审「放行」,3 Minor 记录在案(locationText 无对象键条目返空;解析失败静默吞错无日志;pinned 3 冗余断言)。
+  - 变更记录:已登记(summarizeFindings 签名扩展可注入 csFindingsProvider;source="report-md" 成功路径不可达的裁决)。
+  - 结论:
+    1. findings.json 真实格式:顶层 {documentType, findings, scanId, schemaVersion},severity/confidence 均为嵌套对象 {level: ...};实现按此提取,未知 level 宁缺勿错。
+    2. 任务 4 装配层注入真实 cs findings --json 包装即可走第一级;不传 opts 即手解析默认路径,二者共用 summarizeFindingsDoc 摘要逻辑;status 工具对 report.md 只能经 degraded.reportPath 呈现,不会有 source="report-md" 的 summary。
+    3. 排序稳定性靠显式次关键字(原序下标),不依赖引擎 sort 稳定性。

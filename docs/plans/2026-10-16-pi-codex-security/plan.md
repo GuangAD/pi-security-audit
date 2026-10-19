@@ -160,3 +160,13 @@ TDD waiver 预登记:
   - 结论:
     1. SKILL.md 可直接作 Gate C 自然语言路由脚本(路由表 5 行与 scanSchema 字段名已对齐)。
     2. Windows 凭证 home 是 cs 内嵌 Codex 的认证准备步骤,与 pi 会话模型无关;pi 自身连 Z.ai 正常,不阻塞本包功能。
+- 门 3 后缺陷修复(用户实测 Session 01a15297 + Gate D 实测 | commit 38be087)
+  - BASE:5299e4f
+  - 触发:用户真实会话调用失败——scan 工具三次被 schema 校验拒(scope 被模型序列化为字符串),模型 fallback 到 run/bash 撞回 credential-home ACL 拦截。
+  - 修复三缺陷:A=scope 字符串化(prepareArguments shim);B=run 工具裸 env 无 win32 修复且 scan 无 --auth(executeRun 走 buildChildEnv + 自动补 --auth api-key);C=api.getModel 不存在(Gate D 实测暴露,官方取法是 ctx.model 属性,PiSurface 删去 getModel)。
+  - 评审:controller 会话内修复(缺陷修复闭合条件);mutation check ×4 全红还原 91/91;SKILL.md 补路由纪律(真实扫描只走 scan 工具、scope 传对象、失败不 fallback bash)。
+  - 变更记录:已登记(三缺陷修复条目 + buildChildEnv 导出穷举清单)。
+  - 结论:
+    1. pi 扩展取当前模型的唯一正确方式是 execute 的 ctx.model 属性;ExtensionAPI 上没有 getModel(事件 handler ctx 才有)。单测 stub 不得发明宿主没有的 API,否则全绿也可能是假绿。
+    2. Gate D(真实模型调用工具,选非 git 目录零成本触发 execute)是 schema 往返的唯一真实验证,任何 TypeBox 工具都应补这条验收。
+    3. run 工具与 bash 直跑永远不带 LLM 接线;SKILL 路由纪律是防线,但代码层 env 一致性(--auth/占位/TEMP)同样必须,两层都要。

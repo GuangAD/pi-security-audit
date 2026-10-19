@@ -33,6 +33,7 @@
 - 2026-10-16 05:13 设计访谈与门 1:完成 dev 重流程阶段 1 访谈(模型跟随语义、全覆盖范围、凭证传递、后台+通知等 14 项决策收敛),写 design.md、spec.md 骨架、CONTEXT.md(10 词条)、ADR-0001/0002,用户批准门 1。验证方式:design-checklist 逐条自查通过,呈报文档用户确认。
 - 2026-10-19 05:08 门 3 交付确认:全部 5 任务(llm-wiring / scan-runner / findings-parser / index 装配 / SKILL.md + Gate)完成并提交,独立评审每任务通过,86 测试全绿,pi `pi -e ./` 加载正常,三工具 + `/security-scan` 命令注册齐全,SKILL.md 覆盖 cs 全部 24 子命令与三级安全纪律。验证方式:`node --test extensions/*.test.ts` 86/86、`pi --print -e ./extensions/index.ts` 工具枚举、`--mock` 全链路、`--dry-run` 命令模板、真实 GLM-5.3 扫描 token 流、密钥零泄漏双 grep。
 - 2026-10-19 05:08 Gate B 真实扫描环境三拦截实验固化(`c54b0b7`):`--auth api-key` + 占位 `OPENAI_API_KEY` 过 cs auth 预检;win32 子进程 `TEMP`/`TMP` 重定向至 `<csState>/tmp-cred`(无 `Users` 组写权限)解除 credential-home ACL 拦截;`--max-cost` 对第三方模型不可计量弃用(控费靠最小目标)。验证方式:TEMP 重定向后 ACL 拦截解除、`--auth` 后预检通过、真实 GLM-5.3 token 流持续滚动无 xhigh 拒绝。
+- 2026-10-19 13:5x 门 3 后缺陷修复(`38be087`):用户真实会话 + Gate D 实测暴露三缺陷——scope 被模型字符串化(prepareArguments shim)、run 工具裸 env 无 win32 修复(executeRun 走 buildChildEnv + scan 自动补 --auth)、api.getModel 不存在(改 ctx.model 属性取法)。验证方式:91 测试全绿、mutation ×4 全红还原、Gate D 真实模型调用实测通过(校验通过、execute 真跑、错误按 ADR-0001 语义映射)。
 
 ## 待办
 

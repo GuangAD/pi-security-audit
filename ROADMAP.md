@@ -35,6 +35,7 @@
 - 2026-10-19 05:08 Gate B 真实扫描环境三拦截实验固化(`c54b0b7`):`--auth api-key` + 占位 `OPENAI_API_KEY` 过 cs auth 预检;win32 子进程 `TEMP`/`TMP` 重定向至 `<csState>/tmp-cred`(无 `Users` 组写权限)解除 credential-home ACL 拦截;`--max-cost` 对第三方模型不可计量弃用(控费靠最小目标)。验证方式:TEMP 重定向后 ACL 拦截解除、`--auth` 后预检通过、真实 GLM-5.3 token 流持续滚动无 xhigh 拒绝。
 - 2026-10-19 13:5x 门 3 后缺陷修复(`38be087`):用户真实会话 + Gate D 实测暴露三缺陷——scope 被模型字符串化(prepareArguments shim)、run 工具裸 env 无 win32 修复(executeRun 走 buildChildEnv + scan 自动补 --auth)、api.getModel 不存在(改 ctx.model 属性取法)。验证方式:91 测试全绿、mutation ×4 全红还原、Gate D 真实模型调用实测通过(校验通过、execute 真跑、错误按 ADR-0001 语义映射)。
 - 2026-10-19 07:20 门 3 后缺陷修复 D(`2fe4583`):mimo 网关真实扫描 preflight 被拒(web_search 工具不受支持)——cs 四辅助线程全禁 web_search 而扫描主线程不禁(cs 0.3.0 源码核证),本包 buildWiring 注入 `--codex web_search="disabled"` + run 工具 scan 命令同步自动补(用户显式覆盖时不重复注入)。验证方式:92 测试全绿、mutation ×2 全红还原、mock 扫描实测 cs 接受该覆盖(exit 0);真实网关验证待用户重跑。
+- 2026-10-19 07:39 web_search 修复真实网关验证 + Windows 沙箱环境冲突诊断:用户重跑真实扫描,web_search 报错消失(修复生效),新失败点为 codex Windows 沙箱 setup refresh——沙箱日志铁证 `runtime read/execute validation failed ... VCRUNTIME140_1.dll ... os error 32`:Codex 桌面版 cua 运行时 DLL 被桌面进程锁定,属上游已知 bug(openai/codex#52116/#54325),与 cs/本包无关;裸 codex sandbox 复现并在桌面进程退出后自愈。处置:SKILL.md 解读纪律补已知环境故障条目(症状/根因/处置);包代码零改动。
 
 ## 待办
 

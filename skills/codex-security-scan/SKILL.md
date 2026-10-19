@@ -60,6 +60,12 @@ description: 在 pi 会话中触发与解读 codex-security(cs)安全扫描。�
 - **以 report.md 为准**(findings.json 仅供 status 工具聚合摘要;两者不一致时信 report.md)。
 - **发现不自动改代码**:只汇报,等用户决定是否修复(修复属第一级纪律,见下)。
 
+### 已知环境故障:Windows 沙箱 setup refresh 失败(2026-10-19 实测)
+
+- 症状:scan 停在 preflight(0 文件),日志含 `windows sandbox failed: helper_unknown_error: setup refresh had errors` 或 `runtime read/execute validation failed ... os error 32`。
+- 根因:codex 沙箱 setup 会对 runtime 文件做只读 ACL 校验,清单可能混入 Codex 桌面版运行时 DLL;桌面版进程锁定文件(共享冲突)时校验失败。上游已知 bug(openai/codex#52116、#54325),与 cs 和本包接线无关。
+- 处置:①请用户完全退出 Codex Desktop(含托盘)后重试;②锁释放后可自愈,间隔重试即可。不要改包配置绕过,不要用 run/bash 替跑真实扫描。
+
 ## cs 命令参考表(24 子命令,经 codex_security_run 透传,scan/status 优先走专用工具)
 
 | 子命令 | 用途 | 关键参数 |

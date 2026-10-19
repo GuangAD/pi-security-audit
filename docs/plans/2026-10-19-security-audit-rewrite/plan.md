@@ -164,4 +164,11 @@ TDD waiver 预登记:
   - 评审:自审发现两处——①校验器缺 const 支持(cs schema 大量使用),补实现+守卫用例(mutation 移除 const 1 红→还原 28/28);②测试 fixture 三处不合法(anchor 大写冒号/cwe 应数组/documentType 旧值),均为 fixture 错非校验器错,已修正
   - 结论:
     1. cs schema 契约比直觉严:documentType/schemaVersion 是 const、fingerprints 是对象(algorithm const + primary 强 pattern)、taxonomy.cwe 是数组——fixture 必须照抄 schema 而非凭直觉。
+- 任务 4 | 完成 | commit 78c626d
+  - BASE:9978cf8(skills 线与 extensions 线并行,同基线)
+  - 评审:无发现(机检:codex API 零残留——注:管道 grep 判定要用单命令退出码;563 行 ≤ 2500 预算)
+  - waiver:提示词资产(预登记);行数预算与引用存在性替代
+  - 结论:
+    1. 8 文档:core-scan/validation-guidance/final-report/finding-detail-fields/threat-model/static-finding-assessment/security-guidance/artifact-contract;英文正文最小 diff,头部来源标注中文。
+    2. 来源标注里不要出现 codex API 字面(会被自己的零残留机检命中)——描述改写历史用自然语言。
     2. 子集校验器支持清单:type/required/properties/items/enum/pattern/minLength/maxLength/const/$ref(#/$defs 内部);写测试前先抽 schema 的 required 树与 enum/pattern 清单可少走弯路。

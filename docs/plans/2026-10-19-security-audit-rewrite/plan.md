@@ -143,5 +143,12 @@ TDD waiver 预登记:
 - **依赖**:依赖任务 5、6(硬依赖:两模式 skill 就位)。
 
 ## 开发记录
+## 开发记录
 
-<!-- 每完成一个任务追加一块(格式见 plan-template);当前为空 -->
+- 任务 1 | 完成 | commit 12fd5b9
+  - BASE:e367ec6
+  - 评审:无发现(纯删除与文档;三项机检全过:旧引用清零/package.json 断言/pi 加载零报错)
+  - waiver:纯删除与文档(预登记)
+  - 结论:
+    1. 旧 extensions 九文件(5 模块+4 测试)git rm,history 即归档;rebuild 时 registerTool 形态可考古旧 index.ts(git show 38be087:extensions/index.ts)。
+    2. ADR-0001/0002 仅头部加「已被取代」标注,正文留档;新 ADR-0003(模型配置优先)/0004(skill 驱动)已落。

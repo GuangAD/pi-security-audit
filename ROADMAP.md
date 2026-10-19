@@ -7,7 +7,7 @@ pi 原生安全审计插件:复用 cs(Apache 2.0)审计方法论,skill 驱动 su
 ## 进行中
 
 - dev 重流程阶段 3(门 1、门 2 已批准):按 `docs/plans/2026-10-19-security-audit-rewrite/plan.md` 执行 7 任务。
-  - [x] 任务 1:清场与插件身份
+  - [x] 任务 1:清场与插件身份(commit: 12fd5b9)
   - [ ] 任务 2:schemas 复制 + 引擎模型解析
   - [ ] 任务 3:产物契约校验器
   - [ ] 任务 4:shared references 方法论改写

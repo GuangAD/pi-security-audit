@@ -146,7 +146,7 @@ export function resolveCsSpawnTarget(
  * win32 重定向 TEMP/TMP 至权限收敛目录(无 Users 组写权限),解除 cs 内嵌 Codex 的
  * 凭证临时目录 ACL 校验拦截(用户 profile 目录实测可通过)。
  */
-function buildChildEnv(wiringEnv: Record<string, string>): Record<string, string> {
+export function buildChildEnv(wiringEnv: Record<string, string>): Record<string, string> {
   const env: Record<string, string> = { ...process.env, ...wiringEnv } as Record<string, string>;
   if (!env.OPENAI_API_KEY && !env.CODEX_API_KEY) {
     env.OPENAI_API_KEY = "pi-codex-security-placeholder";

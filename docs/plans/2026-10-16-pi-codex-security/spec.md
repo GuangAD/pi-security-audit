@@ -333,6 +333,7 @@ run 工具的可执行核心:白名单判定、前台执行、输出截断、超
 - `extensions/scan-runner.ts.startScan` — seam。
 - `extensions/scan-runner.ts.getScanStatus` — seam。
 - `extensions/scan-runner.ts.activeScans` — 非 seam — 模块级 Map;重用语义:扫描进程 exit 后条目保留至 status 确认终态,新会话加载时清空(以 state.json 为准恢复,不迁移)。
+- `extensions/scan-runner.ts.buildChildEnv` — 非 seam — 子进程环境构造(OPENAI 占位 + win32 TEMP/TMP 重定向);run-executor 复用;重用语义:纯函数(依赖 resolveCsStateDir,win32 下会 mkdir tmp-cred)。
 - `extensions/findings-parser.ts.summarizeFindings` — seam(签名含可注入 `csFindingsProvider`,见变更记录)。
 - `extensions/run-executor.ts.executeRun` — seam(门 2 详版化时新增,见变更记录)。
 - `extensions/run-executor.ts.CS_SUBCOMMAND_WHITELIST` — 非 seam — 模块级只读常量(全子命令清单 + 拒绝集);重用语义:不可变。
@@ -398,6 +399,11 @@ run 工具的可执行核心:白名单判定、前台执行、输出截断、超
 
 ## 变更记录
 
+- 真实模型调用暴露两缺陷修复(门 3 后实测 Session 01a15297,2026-10-19)
+  - 缺陷 A:模型把 `scope` 序列化为 JSON 字符串(TypeBox anyOf 拒绝),scan 工具真实调用三次全失败;且模型 fallback 到 run/bash 撞回 credential-home ACL 拦截。修复:scan 工具挂 `prepareArguments` 兼容 shim(字符串 scope 校验前还原为对象;非法 JSON 保持原样交校验)。
+  - 缺陷 B:`executeRun` 的 spawn env 原为裸继承,win32 修复(TEMP 重定向、OPENAI 占位)只在 startScan;且 run 跑 `scan` 不带 `--auth api-key` 仍撞 cs auto 预检。修复:`executeRun` env 改走 `buildChildEnv`(scan-runner 导出),`command==="scan"` 且 args 无 `--auth` 时自动补 `--auth api-key`(用户显式传 --auth 时不重复注入)。
+  - SKILL.md 补路由纪律:真实扫描只走 scan 工具(run 仅限 --mock/--dry-run 辅助,失败不得 fallback bash);scope 必须作为对象传入。
+  - 守卫:5 条新测试(shim 修复/非法 JSON/原样透传/run 注入/显式 --auth 保留);mutation check ×3(去 shim 注册、去 --auth 注入、去 env 注入)全红,还原 91/91。
 - 真实扫描命令模板修订:`--auth api-key` + 占位 `OPENAI_API_KEY` + win32 `TEMP`/`TMP` 重定向(任务 5 Gate B 实验后,用户批准 2026-10-16)
   - 原因:真实 LLM 扫描三道环境拦截——①cs 内嵌 Codex 在 Windows `%TEMP%` 建凭证临时目录被 ACL 校验拒绝(继承 `Users`/`Authenticated Users` 写权限即拦,exit 0 静默失败);②cs 默认 `--auth auto` 只认 ChatGPT 登录或 `OPENAI`/`CODEX_API_KEY`,不认自定义 provider 的 `env_key` 注入;③`--max-cost` 对第三方模型(不在 cs 定价表)无法计量,弃用该控费参数
   - 处置:`buildScanArgs` 固化 `--headless --auth api-key`(满足 cs auth 预检,真实鉴权仍走 `wiring.env` 的 `env_key`,占位值不参与任何请求);`buildChildEnv` 在 win32 下将子进程 `TEMP`/`TMP` 指向 `<csState>/tmp-cred`(用户 profile、无 `Users` 组写权限,实测通过校验);`--max-cost` 不进命令模板,控费靠最小目标 + 用户确认

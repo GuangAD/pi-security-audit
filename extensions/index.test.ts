@@ -31,6 +31,7 @@ interface ToolDef {
   description?: string;
   parameters?: unknown;
   execute: (id: string, params: unknown, signal: AbortSignal | undefined, onUpdate: unknown, ctx: unknown) => Promise<ToolResult>;
+  prepareArguments?: (args: unknown) => unknown;
 }
 /** 从 content 数组抽出拼接文本(断言用) */
 function textOf(result: ToolResult): string {
@@ -69,7 +70,7 @@ class StubPi {
 async function callTool(pi: StubPi, name: string, params: unknown): Promise<ToolResult> {
   const def = pi.tools.get(name);
   if (!def) throw new Error(`工具未注册:${name}`);
-  return await def.execute("test-id", params, undefined, undefined, {});
+  return await def.execute("test-id", params, undefined, undefined, { model: pi.model });
 }
 
 // —— hermetic 隔离(假 cs + 隔离 agent-dir / CODEX_HOME / cwd) ——
@@ -293,6 +294,42 @@ describe("codex_security_scan 成功路径 + 完成通知", () => {
   });
 });
 
+describe("scan 入参兼容 shim(实测缺陷 01a15297:scope 被模型序列化为 JSON 字符串)", () => {
+  it("prepareArguments 把字符串 scope 还原为对象后可执行成功", async (t) => {
+    const iso = isolate(t, { git: true, fakeCs: true, zaiKey: "TESTKEY_SENTINEL_12345" });
+    process.chdir(iso.repoDir);
+    const pi = new StubPi();
+    pi.model = RESPONSES_MODEL;
+    createExtension(pi as unknown as ExtensionAPI);
+    const def = pi.tools.get("codex_security_scan");
+    assert.ok(def, "scan 工具已注册");
+    assert.ok(typeof def.prepareArguments === "function", "scan 工具应注册 prepareArguments");
+    // 复刻实测失败形态:mimo-v2.6-flash 把 scope 序列化为 JSON 字符串
+    const raw = { scope: JSON.stringify({ kind: "paths", paths: ["."] }), mode: "standard" };
+    const prepared = def.prepareArguments(raw) as { scope: unknown };
+    assert.equal(typeof prepared.scope, "object", "字符串 scope 应被还原为对象");
+    const result = await def.execute("test-id", prepared, undefined, undefined, { model: pi.model });
+    assert.notEqual(result.isError, true, "经 shim 还原后 scan 应执行成功");
+  });
+
+  it("非法 JSON 字符串 scope 保持原样交校验(不抛)", () => {
+    const pi = new StubPi();
+    createExtension(pi as unknown as ExtensionAPI);
+    const def = pi.tools.get("codex_security_scan");
+    const prepared = def.prepareArguments!({ scope: "{not-json" }) as { scope: unknown };
+    assert.equal(prepared.scope, "{not-json", "非法 JSON 保持原样,交 TypeBox 报错");
+  });
+
+  it("非字符串 scope 原样返回", () => {
+    const pi = new StubPi();
+    createExtension(pi as unknown as ExtensionAPI);
+    const def = pi.tools.get("codex_security_scan");
+    const input = { scope: { kind: "diff", base: "origin/main" } };
+    const prepared = def.prepareArguments!(input) as { scope: unknown };
+    assert.deepEqual(prepared.scope, input.scope, "对象 scope 原样");
+  });
+});
+
 // —— codex_security_status.execute ——
 
 /** 构造已完成扫描产物目录(state.json pid 为不存活值 + artifacts/report.md) */
@@ -428,7 +465,7 @@ describe("/security-scan 命令", () => {
     const notified: string[] = [];
     const def = pi.commands.get("security-scan");
     assert.ok(def, "security-scan 命令已注册");
-    await def.handler("", { ui: { notify: (message: string) => notified.push(message) } });
+    await def.handler("", { ui: { notify: (message: string) => notified.push(message) }, model: pi.model });
     await waitFor(() => iso.captures().length > 0);
     const argv = iso.captures()[0]?.argv ?? [];
     assert.deepEqual(argv.slice(argv.indexOf("--diff"), argv.indexOf("--diff") + 2), ["--diff", "origin/main"]);
@@ -443,7 +480,7 @@ describe("/security-scan 命令", () => {
     createExtension(pi as unknown as ExtensionAPI);
     const def = pi.commands.get("security-scan");
     assert.ok(def);
-    await def.handler("working-tree", { ui: { notify: () => undefined } });
+    await def.handler("working-tree", { ui: { notify: () => undefined }, model: pi.model });
     await waitFor(() => iso.captures().length > 0);
     const argv = iso.captures()[0]?.argv ?? [];
     assert.ok(argv.includes("--working-tree"));

@@ -55,6 +55,8 @@ interface ToolDef {
     onUpdate: ((update: unknown) => void) | undefined,
     ctx: unknown,
   ) => Promise<ToolResult>;
+  /** 校验前的入参兼容处理(pi ToolDefinition 原生字段);可选 */
+  prepareArguments?: (args: unknown) => unknown;
 }
 
 /** 命令定义(简写参数解析后等价于工具调用) */
@@ -66,6 +68,7 @@ interface CommandDef {
 /** 命令上下文:仅消费 ui.notify */
 interface CommandContext {
   ui: { notify: (message: string, options?: unknown) => void };
+  model?: unknown;
 }
 
 /** 工厂内部使用的 pi 方法面(宿主 ExtensionAPI 的结构性投影) */
@@ -73,7 +76,6 @@ interface PiSurface {
   registerTool(def: ToolDef): void;
   registerCommand(name: string, def: CommandDef): void;
   on(event: string, handler: () => void): void;
-  getModel(): unknown;
   sendUserMessage(message: string): unknown;
 }
 
@@ -116,6 +118,27 @@ const runSchema = Type.Object({
 type RunToolParams = Static<typeof runSchema>;
 
 /**
+ * scan 入参兼容处理(pi 在 schema 校验前调用)。
+ *
+ * 实测缺陷(Session 01a15297):部分模型把 `scope` 序列化为 JSON 字符串
+ * (如 "{\"kind\": \"paths\"}")而非对象,TypeBox anyOf 校验拒绝,真实调用三次全失败。
+ * 本 shim 在校验前把字符串形态的 scope 还原为对象;无法还原的保持原样交校验报错。
+ */
+function prepareScanArgs(raw: unknown): unknown {
+  if (typeof raw !== "object" || raw === null) return raw;
+  const args = { ...(raw as Record<string, unknown>) };
+  if (typeof args.scope === "string") {
+    try {
+      const parsed: unknown = JSON.parse(args.scope);
+      if (typeof parsed === "object" && parsed !== null) args.scope = parsed;
+    } catch {
+      /* 非法 JSON 保持原样,交 TypeBox 校验报可读错误 */
+    }
+  }
+  return args;
+}
+
+/**
  * 扩展工厂:注册三工具 + /security-scan 命令 + session_shutdown 清理。
  * 无内部状态;scan 工具的完成通知与命令处理共用同一个内部执行函数。
  */
@@ -123,9 +146,10 @@ export default function (pi: ExtensionAPI): void {
   const api = pi as unknown as PiSurface;
 
   /** scan 工具内部执行(命令 handler 复用,不走 ctx.executeTool) */
-  async function runScanTool(params: ScanParams): Promise<ToolResult> {
-    // 会话模型跟随(ADR-0001):pi.getModel() 透传,协议/凭证解析在 llm-wiring
-    const sessionModel = (api.getModel() ?? null) as Parameters<typeof resolveLlmWiring>[0];
+  async function runScanTool(params: ScanParams, sessionModelRaw: unknown): Promise<ToolResult> {
+    // 会话模型跟随(ADR-0001):execute 的 ctx.model 透传(官方示例同款取法),
+    // 协议/凭证解析在 llm-wiring。会话模型可能未定义(undefined)→ 落 null 走覆盖配置/报错。
+    const sessionModel = (sessionModelRaw ?? null) as Parameters<typeof resolveLlmWiring>[0];
     const wiring = resolveLlmWiring(sessionModel, loadOverrides());
     if ("reason" in wiring) {
       // detail 已含补救指引(/model 切换或写 <agent-dir>/codex-security.json),原文返回
@@ -170,7 +194,9 @@ export default function (pi: ExtensionAPI): void {
     description:
       "后台启动 codex-security 安全扫描:scope 三选一(diff 基线 / workingTree 工作树 / paths 路径),LLM 跟随会话模型,返回 scanDir 句柄。",
     parameters: scanSchema,
-    execute: (_id, params, _signal, _onUpdate, _ctx) => runScanTool(params as ScanToolParams as ScanParams),
+    prepareArguments: prepareScanArgs,
+    execute: (_id, params, _signal, _onUpdate, ctx) =>
+      runScanTool(params as ScanToolParams as ScanParams, (ctx as { model?: unknown } | undefined)?.model),
   });
 
   api.registerTool({
@@ -251,7 +277,7 @@ export default function (pi: ExtensionAPI): void {
           : trimmed === "working-tree"
             ? { scope: { kind: "workingTree" } }
             : { scope: { kind: "diff", base: trimmed } };
-      const result = await runScanTool(params);
+      const result = await runScanTool(params, ctx.model);
       const message = textOf(result);
       ctx.ui.notify(result.isError ? `安全扫描启动失败:${message}` : message);
     },

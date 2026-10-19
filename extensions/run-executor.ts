@@ -9,7 +9,7 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 
-import { resolveCsSpawnTarget } from "./scan-runner.ts";
+import { buildChildEnv, resolveCsSpawnTarget } from "./scan-runner.ts";
 
 // —— 白名单(cs --help 固化于 2026-10-16,24 个子命令) ——
 
@@ -140,8 +140,11 @@ export async function executeRun(
   const timeoutMs = normalizeRunTimeoutMs(opts?.timeoutMs);
 
   const target = resolveCsSpawnTarget();
-  const child = spawn(target.command, [...target.prefixArgs, command, ...args], {
+  // scan 命令补 --auth api-key:与 codex_security_scan 同源,避免真实扫描撞 cs auto 预检与 win32 credential-home ACL 拦截
+  const scanAuthArgs = command === "scan" && !args.includes("--auth") ? ["--auth", "api-key"] : [];
+  const child = spawn(target.command, [...target.prefixArgs, command, ...scanAuthArgs, ...args], {
     cwd: process.cwd(),
+    env: buildChildEnv({}),
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });

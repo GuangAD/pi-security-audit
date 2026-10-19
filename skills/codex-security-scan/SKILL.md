@@ -28,6 +28,11 @@ description: 在 pi 会话中触发与解读 codex-security(cs)安全扫描。�
 
 扫描是后台任务:scan 立即返回 `scanDir`(产物目录绝对路径,后续查询的唯一凭据)/ `pid` / 脱敏命令行。进程退出后会话会自动收到通知,届时调 status 解读。
 
+**路由纪律(实测教训,不可违反)**:
+
+1. **真实扫描只走 `codex_security_scan`**。`codex_security_run` 跑 `scan` 仅限 `--mock` / `--dry-run` 等辅助场景——run 不做 LLM 接线注入(无 zai provider/env_key),真实扫描会缺凭证或计费错位;bash 直跑同理。scan 工具失败时**不得 fallback 到 run 或 bash**,重试正确参数或向用户报障。
+2. **`scope` 参数必须作为对象传入**(如 `{ "kind": "paths", "paths": ["."] }`),不要序列化成 JSON 字符串。扩展已内置字符串修复(prepareArguments),但请始终传对象;若工具报 schema 校验失败,把 scope 写成对象重试。
+
 ## 三工具用法
 
 ### codex_security_scan — 后台启动扫描

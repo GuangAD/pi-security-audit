@@ -58,7 +58,7 @@ const FAKE_ENTRY_SOURCE = String.raw`const fs = require("node:fs");
 const args = process.argv.slice(2);
 const captureFile = process.env.FAKE_CS_CAPTURE;
 if (captureFile) {
-  fs.appendFileSync(captureFile, JSON.stringify({ argv: args, cwd: process.cwd() }) + "\n");
+  fs.appendFileSync(captureFile, JSON.stringify({ argv: args, cwd: process.cwd(), openaiKey: process.env.OPENAI_API_KEY || null, temp: process.env.TEMP || null }) + "\n");
 }
 const text = process.env.FAKE_CS_OUTPUT_TEXT;
 if (text) process.stdout.write(text);
@@ -86,8 +86,8 @@ if (sleepMs > 0) {
 interface FakeCsFixture {
   fakeDir: string;
   captureFile: string;
-  /** 每条记录:{ argv, cwd } JSON 行 */
-  captures(): Array<{ argv: string[]; cwd: string }>;
+  /** 每条记录:{ argv, cwd, openaiKey, temp } JSON 行 */
+  captures(): Array<{ argv: string[]; cwd: string; openaiKey: string | null; temp: string | null }>;
 }
 
 /** PATH 前置假 cs + 隔离环境变量;返回 teardown(测试末尾必须调用) */
@@ -122,7 +122,7 @@ function installFakeCs(t: TestContext): FakeCsFixture {
   return {
     fakeDir,
     captureFile,
-    captures(): Array<{ argv: string[]; cwd: string }> {
+    captures(): Array<{ argv: string[]; cwd: string; openaiKey: string | null; temp: string | null }> {
       try {
         return fs
           .readFileSync(captureFile, "utf8")
@@ -267,6 +267,34 @@ describe("executeRun", () => {
     assert.ok("truncated" in result && result.truncated === false);
   });
 
+
+  it("守卫(实测缺陷 01a15297):scan 命令自动补 --auth api-key + 子进程环境带 OPENAI 占位与 win32 TEMP 重定向", async (t) => {
+    const fake = installFakeCs(t);
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.CODEX_API_KEY;
+    delete process.env.TEMP;
+    delete process.env.TMP;
+    const result = await executeRun("scan", ["--path", "."]);
+    assert.ok("exitCode" in result && result.exitCode === 0);
+    const cap = fake.captures()[0];
+    assert.ok(cap, "假 cs 应捕获调用");
+    assert.equal(cap.argv[0], "scan", "argv[0] 应为子命令名");
+    assert.deepEqual(cap.argv.slice(1, 3), ["--auth", "api-key"], "scan 命令应自动补 --auth api-key");
+    assert.equal(cap.openaiKey, "pi-codex-security-placeholder", "子进程应带 OPENAI_API_KEY 占位满足 cs auth 预检");
+    if (process.platform === "win32") {
+      assert.ok(cap.temp !== null && cap.temp.includes("tmp-cred"), `win32 下 TEMP 应指向权限收敛目录,实际 ${cap.temp}`);
+    }
+  });
+
+  it("守卫补充:scan 命令已显式带 --auth 时不重复注入;非 scan 命令不注入", async (t) => {
+    const fake = installFakeCs(t);
+    const r1 = await executeRun("scan", ["--auth", "chatgpt", "--path", "."]);
+    assert.ok("exitCode" in r1);
+    assert.deepEqual(fake.captures()[0].argv.slice(1, 3), ["--auth", "chatgpt"], "用户显式 --auth 应保留");
+    const r2 = await executeRun("info", []);
+    assert.ok("exitCode" in r2);
+    assert.ok(!fake.captures()[1].argv.includes("--auth"), "非 scan 命令不注入 --auth");
+  });
   it("stderr 与 stdout 合并且保持到达顺序;超时外的正常退出不受 taskkill 影响", async (t) => {
     installFakeCs(t);
     process.env.FAKE_CS_OUTPUT_TEXT = "out-first";

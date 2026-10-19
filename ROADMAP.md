@@ -11,7 +11,7 @@ pi 原生安全审计插件:复用 cs(Apache 2.0)审计方法论,skill 驱动 su
   - [x] 任务 2:schemas 复制 + 引擎模型解析(commit: 3a194c1)
   - [x] 任务 3:产物契约校验器(commit: 7543748)
   - [ ] 任务 4:shared references 方法论改写
-  - [ ] 任务 5:security-audit 主 skill(paths)
+  - [x] 任务 5:security-audit 主 skill(paths)
   - [ ] 任务 6:security-audit-diff skill
   - [ ] 任务 7:端到端验收与收尾
 

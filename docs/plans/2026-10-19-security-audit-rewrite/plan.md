@@ -25,7 +25,7 @@ TDD waiver 预登记:
 - [ ] 任务 2:schemas 复制 + 引擎模型解析(实现 + 工具)(commit: ____ )
 - [ ] 任务 3:产物契约校验器(实现 + 工具)(commit: ____ )
 - [ ] 任务 4:shared references 方法论改写(commit: ____ )
-- [ ] 任务 5:security-audit 主 skill(paths 模式)(commit: ____ )
+- [x] 任务 5:security-audit 主 skill(paths 模式)(commit: 83017c8)
 - [ ] 任务 6:security-audit-diff skill(commit: ____ )
 - [ ] 任务 7:端到端验收与收尾(commit: ____ )
 

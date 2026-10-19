@@ -5,7 +5,11 @@
  * 设计原则(ADR-0004):代码只做「确定性计算」,方法论判断留给 agent 与 skills。
  * 所有失败以 isError 结果返回,不向模型抛裸异常;detail 文案原样透传。
  */
+import fs from "node:fs";
+import path from "node:path";
 import { Type } from "typebox";
+
+import { validateAgainstSchema } from "./artifact-validator.ts";
 
 import { resolveScanModel } from "./scan-model.ts";
 
@@ -43,6 +47,13 @@ interface PiSurface {
 
 const resolveModelSchema = Type.Object({});
 
+const validateArtifactsSchema = Type.Object({
+  kind: Type.Union([Type.Literal("findings"), Type.Literal("coverage")], {
+    description: "产物类型:findings 或 coverage",
+  }),
+  path: Type.String({ description: "产物 JSON 文件的绝对或相对路径" }),
+});
+
 /** 注册薄工具(pi 插件入口,加载时被调用一次) */
 export function registerSecurityAudit(pi: PiSurface): void {
   pi.registerTool({
@@ -57,6 +68,33 @@ export function registerSecurityAudit(pi: PiSurface): void {
       const text = r.ok
         ? `引擎模型:${r.provider}/${r.model}(来源:${r.source === "config" ? "配置文件" : "会话模型"})`
         : `引擎模型解析失败:${r.detail}`;
+      return { content: [{ type: "text", text }], details: r, isError: !r.ok };
+    },
+  });
+
+  pi.registerTool({
+    name: "validate_scan_artifacts",
+    label: "校验扫描产物契约",
+    description:
+      "按契约校验扫描产物 JSON(findings/coverage 二选一)。进入报告前必调:ok:false 时把 errors 逐条回传给产物作者修复,不得带病出报告。",
+    parameters: validateArtifactsSchema,
+    execute: async (_id, params, _signal, _onUpdate, _ctx) => {
+      const p = params as { kind: "findings" | "coverage"; path: string };
+      let doc: unknown;
+      try {
+        doc = JSON.parse(fs.readFileSync(p.path, "utf8"));
+      } catch (e) {
+        return {
+          content: [{ type: "text", text: `无法读取产物文件:${p.path}(${(e as Error).message})` }],
+          details: undefined,
+          isError: true,
+        };
+      }
+      const schemaPath = path.join(import.meta.dirname ?? ".", "..", "schemas", `${p.kind}.schema.json`);
+      const r = validateAgainstSchema(doc, schemaPath);
+      const text = r.ok
+        ? `${p.kind} 产物契约校验通过。`
+        : `产物契约校验失败(${r.errors.length} 处):\n${r.errors.map((e) => `- ${e.path}: ${e.message}`).join("\n")}`;
       return { content: [{ type: "text", text }], details: r, isError: !r.ok };
     },
   });

@@ -17,6 +17,7 @@ description: 对一次变更做安全审计:指定 commit、分支差异或工�
 2. **inventory 构成**:变更文本文件,不看扩展名/目录;被 ignore 规则覆盖的已跟踪变更仍在 scope;删除文件按 base 修订(`git show <base>:<path>`)审读;未变更文件仅在解释变更需要时查看。
 3. **安全相关性判定**:按文件行为与可达性评估(含构建/部署/CI 用途),不按路径猜测。
 4. **worker 指令差异**:基线审计员改为「变更审阅者」——对照 base 修订读新版本,标记变更引入的风险;未变更的支撑代码按需只读。验证与报告纪律不变(验证回执、反证规则、coverage 处置次序见 `../security-audit-shared/references/final-report.md` 的 diff-scan 段)。
+5. **入口未确立 ≠ deferred**:变更引入的新危险 sink,若 source/control/sink 三元组已由源码确证(如拼接构造 SQL 且无参数化),即使本修订内攻击者入口尚未接线(函数未导出/无调用者),处置仍为 **reportable**——入口前置条件写入该 finding 的 `severity.changeConditions`(与 core-scan 第 7 步「公共库边界即充分」一致)。`deferred` 仅用于证据本身不完整的候选(source/control/sink 未凑齐)。
 
 ## 编排步骤
 

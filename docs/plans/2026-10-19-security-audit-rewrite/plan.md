@@ -26,8 +26,8 @@ TDD waiver 预登记:
 - [ ] 任务 3:产物契约校验器(实现 + 工具)(commit: ____ )
 - [ ] 任务 4:shared references 方法论改写(commit: ____ )
 - [x] 任务 5:security-audit 主 skill(paths 模式)(commit: 83017c8)
-- [x] 任务 6:security-audit-diff skill(commit: 949422d)(commit: ____ )
-- [ ] 任务 7:端到端验收与收尾(commit: ____ )
+- [x] 任务 6:security-audit-diff skill(commit: 949422d)
+- [x] 任务 7:端到端验收与收尾(commit: f506114 + README)
 
 推荐排序即上述编号顺序(任务 4 可与 2/3 并行,但串行执行按编号)。
 
@@ -149,6 +149,15 @@ TDD waiver 预登记:
   - 评审:无发现(34 行 ≤ 200;引用机检 3/3;codex 零残留)
   - waiver:提示词资产(预登记)
   - 结论:diff 三源(commit/branch/workingTree)按 bash 可得性裁剪,PR 源标注可选;关键差异=inventory 变更清单 + 删除文件按 base 修订审 + findings 仅覆盖变更引入面。
+- 任务 7 | 完成 | commit f506114(契约修复)+ README(本块)
+  - BASE:217c063
+  - 评审:端到端实测命中一个真实契约缺陷并已修复——coverage.schema.json receiptRefs 强制 artifacts/ 前缀与 artifact-contract 的 checkpoints/ 语义矛盾(f506114:pattern 放宽+裁剪登记+守卫测试);skill 驱动风险实锤一次(编排 agent 口头复述 JSON 未落盘),SKILL.md 已加「checkpoint 是文件不是回复文本」纪律;diff 首轮「入口未确立→deferred」与 paths 判定不一致,SKILL 加「入口未确立 ≠ deferred」规则后重跑,findings=1(high SQL 注入+changeConditions)符合预期
+  - waiver:无
+  - 结论:
+    1. 端到端 paths:3 发现(2 埋点全中+1 agent 自主发现 rotateToken 不轮换),含受控运行时复现,目标树零改动,产物过 validate。
+    2. 端到端 diff:1 发现(high SQL 注入,changeConditions 承载入口前置),coverage 五种处置,产物过 validate。
+    3. pi --print 跑审计必须 --permission-mode bypass(写权限默认拒),使用文档级知识。
+    4. pi-subagents 的 reviewer 是只读角色:skill 编排里分析员检查点由主 agent 落盘——编排指令已兼容(主 agent 按返回值写文件)。
 ## 开发记录
 
 - 任务 1 | 完成 | commit 12fd5b9

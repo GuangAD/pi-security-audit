@@ -171,4 +171,9 @@ TDD waiver 预登记:
   - 结论:
     1. 8 文档:core-scan/validation-guidance/final-report/finding-detail-fields/threat-model/static-finding-assessment/security-guidance/artifact-contract;英文正文最小 diff,头部来源标注中文。
     2. 来源标注里不要出现 codex API 字面(会被自己的零残留机检命中)——描述改写历史用自然语言。
+- 任务 5 | 完成 | commit 83017c8
+  - BASE:78c626d
+  - 评审:无发现(38 行 ≤ 300;引用机检 7/7——注意 skill 内引用路径必须写 ../security-audit-shared/(相对 skill 目录),引用存在性机检脚本从 SKILL.md 抽路径逐条 fs.existsSync)
+  - waiver:提示词资产(预登记)
+  - 结论:编排 11 步 = 定模型→建目录→预检→基线(async)→威胁建模→调查包(并行)→汇总→独立验证→产物+校验→报告→汇报;每步都落到 checkpoint 文件,中断可恢复。
     2. 子集校验器支持清单:type/required/properties/items/enum/pattern/minLength/maxLength/const/$ref(#/$defs 内部);写测试前先抽 schema 的 required 树与 enum/pattern 清单可少走弯路。

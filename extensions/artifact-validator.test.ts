@@ -165,6 +165,18 @@ test("F 附:const 违规拦截(documentType 错值)", () => {
   if (!r.ok) assert.ok(r.errors.some((e) => e.path.includes("documentType") && /常量/.test(e.message)));
 });
 
+test("C 附:receiptRefs 接受 checkpoints/ 路径,拦截 ../ 穿越", () => {
+  const okDoc = minCoverageDoc({
+    surfaces: [{ id: "s1", label: "x", disposition: "reported", receiptRefs: ["checkpoints/validations/c1.json"] }],
+  });
+  assert.deepEqual(validateCoverage(okDoc), { ok: true });
+  const badDoc = minCoverageDoc({
+    surfaces: [{ id: "s1", label: "x", disposition: "reported", receiptRefs: ["../escape.json"] }],
+  });
+  const r = validateCoverage(badDoc);
+  assert.equal(r.ok, false);
+});
+
 // —— validateCoverage 用例详版(spec 3 例) ——
 
 test("C1 合法 coverage 通过", () => {

@@ -26,7 +26,7 @@ TDD waiver 预登记:
 - [ ] 任务 3:产物契约校验器(实现 + 工具)(commit: ____ )
 - [ ] 任务 4:shared references 方法论改写(commit: ____ )
 - [x] 任务 5:security-audit 主 skill(paths 模式)(commit: 83017c8)
-- [ ] 任务 6:security-audit-diff skill(commit: ____ )
+- [x] 任务 6:security-audit-diff skill(commit: 949422d)(commit: ____ )
 - [ ] 任务 7:端到端验收与收尾(commit: ____ )
 
 推荐排序即上述编号顺序(任务 4 可与 2/3 并行,但串行执行按编号)。
@@ -143,6 +143,12 @@ TDD waiver 预登记:
 - **依赖**:依赖任务 5、6(硬依赖:两模式 skill 就位)。
 
 ## 开发记录
+
+- 任务 6 | 完成 | commit 949422d
+  - BASE:78c626d
+  - 评审:无发现(34 行 ≤ 200;引用机检 3/3;codex 零残留)
+  - waiver:提示词资产(预登记)
+  - 结论:diff 三源(commit/branch/workingTree)按 bash 可得性裁剪,PR 源标注可选;关键差异=inventory 变更清单 + 删除文件按 base 修订审 + findings 仅覆盖变更引入面。
 ## 开发记录
 
 - 任务 1 | 完成 | commit 12fd5b9

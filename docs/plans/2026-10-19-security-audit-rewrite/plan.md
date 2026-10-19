@@ -159,3 +159,9 @@ TDD waiver 预登记:
   - 结论:
     1. reason=机器码(config-corrupt/no-model)、detail=人类文案——spec 骨架期「reason 含损坏配置」的粗略表述已按此修正并登记变更记录。
     2. typebox 经 gitignored node_modules junction 解析(与旧项目同机制),peerDependencies 已补声明。
+- 任务 3 | 完成 | commit 7543748
+  - BASE:9978cf8(与任务 2 同基线串行)
+  - 评审:自审发现两处——①校验器缺 const 支持(cs schema 大量使用),补实现+守卫用例(mutation 移除 const 1 红→还原 28/28);②测试 fixture 三处不合法(anchor 大写冒号/cwe 应数组/documentType 旧值),均为 fixture 错非校验器错,已修正
+  - 结论:
+    1. cs schema 契约比直觉严:documentType/schemaVersion 是 const、fingerprints 是对象(algorithm const + primary 强 pattern)、taxonomy.cwe 是数组——fixture 必须照抄 schema 而非凭直觉。
+    2. 子集校验器支持清单:type/required/properties/items/enum/pattern/minLength/maxLength/const/$ref(#/$defs 内部);写测试前先抽 schema 的 required 树与 enum/pattern 清单可少走弯路。

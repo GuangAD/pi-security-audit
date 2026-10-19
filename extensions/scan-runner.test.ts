@@ -64,7 +64,7 @@ const args = process.argv.slice(2);
 const out = process.env.FAKE_CS_CAPTURE;
 if (out) {
   try {
-    fs.writeFileSync(out, JSON.stringify({ args, cwd: process.cwd(), envTestKey: process.env.TEST_ENV_KEY || null }));
+    fs.writeFileSync(out, JSON.stringify({ args, cwd: process.cwd(), envTestKey: process.env.TEST_ENV_KEY || null, openaiKey: process.env.OPENAI_API_KEY || null, temp: process.env.TEMP || null }));
   } catch {}
 }
 process.stdout.write("fake-cs: started\\n");
@@ -76,7 +76,7 @@ setTimeout(() => { process.stdout.write("late-marker\\n"); process.exit(0); }, N
 function nextCapturePath(): string {
   return path.join(tmpRoot, `capture-${captureCounter++}.json`);
 }
-function readCapture(file: string): { args: string[]; cwd: string; envTestKey: string | null } {
+function readCapture(file: string): { args: string[]; cwd: string; envTestKey: string | null; openaiKey: string | null; temp: string | null } {
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
 
@@ -291,7 +291,7 @@ function shellSplit(cmd: string): string[] {
 }
 
 /** 启动一次扫描并等待假 cs 捕获 argv;返回句柄与捕获结果 */
-async function startAndCapture(params: ScanParams): Promise<{ handle: ScanHandle; cap: { args: string[]; cwd: string; envTestKey: string | null } }> {
+async function startAndCapture(params: ScanParams): Promise<{ handle: ScanHandle; cap: { args: string[]; cwd: string; envTestKey: string | null; openaiKey: string | null; temp: string | null } }> {
   const captureFile = nextCapturePath();
   setEnv("FAKE_CS_CAPTURE", captureFile);
   const handle = await startScan(params, WIRING, repoDir);
@@ -338,6 +338,11 @@ test("句柄后置:绝对路径已存在、artifacts 为空目录、state.json �
   // 子进程真实启动:cwd 为仓库根,env 注入 wiring.env(key 只走 env)
   assert.equal(cap.cwd, path.resolve(repoDir));
   assert.equal(cap.envTestKey, KEY);
+  // cs auth 预检占位 + win32 TEMP 重定向(实验固化:解除 credential-home ACL 拦截)
+  assert.equal(cap.openaiKey, "pi-codex-security-placeholder");
+  if (process.platform === "win32") {
+    assert.ok(cap.temp !== null && cap.temp.includes("tmp-cred"), `win32 下 TEMP 应指向权限收敛目录,实际 ${cap.temp}`);
+  }
 
   killAndAwait(handle.pid);
   await waitFor(() => !isPidAlive(handle.pid), "假 cs 退出");
@@ -361,6 +366,8 @@ test("args 拼装 6 组合全枚举:scope(3) × mode(2),逐元素相等", async 
       "--mode",
       params.mode as string,
       "--headless",
+      "--auth",
+      "api-key",
       "--output-dir",
       path.join(handle.scanDir, "artifacts"),
       ...CODEX_FLAT,

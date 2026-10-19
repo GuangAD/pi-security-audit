@@ -388,6 +388,7 @@ run 工具的可执行核心:白名单判定、前台执行、输出截断、超
 2. 手解析仅做字段提取与计数,不做任何推理或去重(那是 cs 的事)。
 
 ### 已知的坑
+- `--max-cost` 对第三方模型不可用:glm-5.3 等不在 cs 定价表,传该参数 cs 直接报「A scan cost limit is not available for the configured model」并退出;控费只能靠最小扫描目标 + 用户确认(命令模板已不带 `--max-cost`)。
 
 - cs `--output-dir` 官方强制仓库外:选定目录须在 cs state 体系内(`CODEX_HOME`/`~/.codex` 下),不得指向仓库内;每次扫描唯一目录(时间戳+pid),startScan 先 mkdir 再 spawn。
 - GLM 对 Codex effort 档位(默认 xhigh)的兼容性未实测:Gate A 用 `--dry-run`/`--mock` 验证,失败降档固化进 wiring。
@@ -397,6 +398,12 @@ run 工具的可执行核心:白名单判定、前台执行、输出截断、超
 
 ## 变更记录
 
+- 真实扫描命令模板修订:`--auth api-key` + 占位 `OPENAI_API_KEY` + win32 `TEMP`/`TMP` 重定向(任务 5 Gate B 实验后,用户批准 2026-10-16)
+  - 原因:真实 LLM 扫描三道环境拦截——①cs 内嵌 Codex 在 Windows `%TEMP%` 建凭证临时目录被 ACL 校验拒绝(继承 `Users`/`Authenticated Users` 写权限即拦,exit 0 静默失败);②cs 默认 `--auth auto` 只认 ChatGPT 登录或 `OPENAI`/`CODEX_API_KEY`,不认自定义 provider 的 `env_key` 注入;③`--max-cost` 对第三方模型(不在 cs 定价表)无法计量,弃用该控费参数
+  - 处置:`buildScanArgs` 固化 `--headless --auth api-key`(满足 cs auth 预检,真实鉴权仍走 `wiring.env` 的 `env_key`,占位值不参与任何请求);`buildChildEnv` 在 win32 下将子进程 `TEMP`/`TMP` 指向 `<csState>/tmp-cred`(用户 profile、无 `Users` 组写权限,实测通过校验);`--max-cost` 不进命令模板,控费靠最小目标 + 用户确认
+  - 实验依据:TEMP 重定向后 ACL 拦截解除,`--auth api-key` 后预检通过,真实 GLM-5.3 调用 token 流持续滚动、无 xhigh 拒绝(Gate B 真实链路验证)
+  - 项目 `.tmp/` 方案已实验排除:cs 明令临时目录须在扫描仓库外(`--dry-run` 输出),且 `D:\` 盘继承 `Authenticated Users` 写权限仍会被 ACL 校验拦截
+  - 影响:`buildScanArgs` 后置条件(命令模板)与 `startScan` env 注入行为;`scan-runner` 6 组合枚举测试期望 args 同步;不影响 design.md「跟随会话模型」与产物路径决策
 - 产物目录双层结构与 ScanStatus.detail(任务 2 实测裁决,controller 批准 2026-10-16)
   - 原因:cs 对 `--output-dir` 硬性要求目录为空(exit 2「Scan output directory is not empty」),同目录预写 state.json 必然失败;`--archive-existing` 会把 state.json 移出 scanDir 破坏跨会话恢复;pipe 中转破坏 detached 存活——已批准的「单层同目录」无确定性解
   - 处置:startScan 改双层——scanDir(`<ts>-<pid>` 下落 state.json 与日志)+ 空 artifacts/ 子目录经 `--output-dir` 传入(产物落 artifacts/);getScanStatus 的 reportPath 改 `<scanDir>/artifacts/report.md`(已实测 cs exit 0、产物齐全、state.json 原样保留)

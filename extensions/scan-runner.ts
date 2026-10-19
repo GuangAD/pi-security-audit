@@ -140,6 +140,26 @@ export function resolveCsSpawnTarget(
 
 // —— 产物目录(变更记录:双层结构;CODEX_HOME → ~/.codex 回退) ——
 
+/**
+ * 构造扫描子进程环境:注入 wiring env;占位 OPENAI_API_KEY 满足 cs --auth api-key 预检
+ * (真实鉴权走 wiring.env 的 env_key,占位值不参与任何请求);
+ * win32 重定向 TEMP/TMP 至权限收敛目录(无 Users 组写权限),解除 cs 内嵌 Codex 的
+ * 凭证临时目录 ACL 校验拦截(用户 profile 目录实测可通过)。
+ */
+function buildChildEnv(wiringEnv: Record<string, string>): Record<string, string> {
+  const env: Record<string, string> = { ...process.env, ...wiringEnv } as Record<string, string>;
+  if (!env.OPENAI_API_KEY && !env.CODEX_API_KEY) {
+    env.OPENAI_API_KEY = "pi-codex-security-placeholder";
+  }
+  if (process.platform === "win32") {
+    const credTemp = path.join(resolveCsStateDir(), "tmp-cred");
+    fs.mkdirSync(credTemp, { recursive: true });
+    env.TEMP = credTemp;
+    env.TMP = credTemp;
+  }
+  return env;
+}
+
 /** cs state 根目录:环境变量 CODEX_HOME,未设回退 ~/.codex */
 function resolveCsStateDir(): string {
   const fromEnv = process.env.CODEX_HOME;
@@ -231,7 +251,9 @@ function buildScopeArgs(scope: ScanParams["scope"]): string[] {
 export function buildScanArgs(params: ScanParams, wiring: LlmWiring, artifactsDir: string): string[] {
   const args = ["scan", ".", ...buildScopeArgs(params.scope)];
   if (params.mode !== undefined) args.push("--mode", params.mode);
-  args.push("--headless", "--output-dir", artifactsDir);
+  // --auth api-key:cs 默认 auto 只认 ChatGPT 登录或 OPENAI/CODEX_API_KEY,不认自定义 provider 注入;
+  // 真实鉴权走 wiring.env 的 env_key,此处仅为满足 cs 自身 auth 预检(占位 OPENAI_API_KEY 见 buildChildEnv)。
+  args.push("--headless", "--auth", "api-key", "--output-dir", artifactsDir);
   for (const codexArg of wiring.codexArgs) args.push("--codex", codexArg);
   args.push("--model", wiring.model);
   return args;
@@ -356,7 +378,7 @@ export async function startScan(params: ScanParams, wiring: LlmWiring, repoPath:
     child = spawn(target.command, [...target.prefixArgs, ...args], {
       detached: true,
       cwd: repoRoot,
-      env: { ...process.env, ...wiring.env },
+      env: buildChildEnv(wiring.env),
       stdio: ["ignore", logFd, logFd],
     });
   } catch (err) {

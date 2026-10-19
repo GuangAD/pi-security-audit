@@ -177,4 +177,7 @@
 
 ## 变更记录
 
-- 无
+
+- resolveScanModel 错误字段语义修正(任务 2)
+  - 原因:骨架期用例期望「reason 含损坏配置」为粗略表述;实现确定契约 reason=机器码(config-corrupt/no-model),detail=人类可读文案(含补救指引)
+  - 影响:用例 3/4/5 的断言目标由 reason 改为 reason 相等 + detail 正则;对外行为不变(ok:false 与文案语义均保留)

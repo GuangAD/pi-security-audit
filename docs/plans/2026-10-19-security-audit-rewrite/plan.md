@@ -152,3 +152,10 @@ TDD waiver 预登记:
   - 结论:
     1. 旧 extensions 九文件(5 模块+4 测试)git rm,history 即归档;rebuild 时 registerTool 形态可考古旧 index.ts(git show 38be087:extensions/index.ts)。
     2. ADR-0001/0002 仅头部加「已被取代」标注,正文留档;新 ADR-0003(模型配置优先)/0004(skill 驱动)已落。
+- 任务 2 | 完成 | commit 3a194c1
+  - BASE:9978cf8
+  - 评审:无发现(12/12 测试;mutation「损坏静默回退」3 红→还原 9/9;pi 加载实测过)
+  - 变更记录:已登记(reason/detail 语义修正)
+  - 结论:
+    1. reason=机器码(config-corrupt/no-model)、detail=人类文案——spec 骨架期「reason 含损坏配置」的粗略表述已按此修正并登记变更记录。
+    2. typebox 经 gitignored node_modules junction 解析(与旧项目同机制),peerDependencies 已补声明。

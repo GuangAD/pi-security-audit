@@ -170,3 +170,12 @@ TDD waiver 预登记:
     1. pi 扩展取当前模型的唯一正确方式是 execute 的 ctx.model 属性;ExtensionAPI 上没有 getModel(事件 handler ctx 才有)。单测 stub 不得发明宿主没有的 API,否则全绿也可能是假绿。
     2. Gate D(真实模型调用工具,选非 git 目录零成本触发 execute)是 schema 往返的唯一真实验证,任何 TypeBox 工具都应补这条验收。
     3. run 工具与 bash 直跑永远不带 LLM 接线;SKILL 路由纪律是防线,但代码层 env 一致性(--auth/占位/TEMP)同样必须,两层都要。
+- 门 3 后缺陷修复 D:扫描主线程 web_search 禁用(用户实测 mimo 网关 preflight 失败 | commit 2fe4583)
+  - BASE:1506b2d
+  - 触发:用户真实扫描 failed——`responses_feature_not_supported: tool type 'web_search' is not supported by this gateway`,cs 扫描主线程继承 Codex 默认带 web_search 工具,第三方 Responses 网关拒绝;cs 四个辅助线程全显式禁,唯独主线程是缺口(cs 0.3.0 源码核证)。
+  - 修复:buildWiring codexArgs 无条件追加 `web_search="disabled"`(第 6 项,常量 WEB_SEARCH_DISABLED_CODEX_ARG 导出);run 工具 scan 命令同步自动补(用户显式 web_search 覆盖时不重复注入)。官方端点 disabled 亦合法(cs validate 路径同款),零副作用。
+  - 评审:controller 会话内修复;mutation ×2 全红还原 92/92;mock 扫描实测 cs 接受该覆盖(exit 0)。
+  - 变更记录:已登记(缺陷 D 条目 + WEB_SEARCH_DISABLED_CODEX_ARG 穷举清单)。
+  - 结论:
+    1. 依赖外部 CLI 的接线包,外部每个辅助路径与主路径的配置差异都要对照——cs 内部"辅助线程全禁、主线程不禁"的不对称就是坑;升级 cs 版本后应复查该行为是否被官方修复(若 cs 未来主线程默认禁用,本注入幂等无害)。
+    2. 真实网关差异(官方端点无感的能力)只能靠真实网关实测暴露;mock/单测永远绿。

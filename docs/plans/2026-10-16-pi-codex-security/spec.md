@@ -334,6 +334,7 @@ run 工具的可执行核心:白名单判定、前台执行、输出截断、超
 - `extensions/scan-runner.ts.getScanStatus` — seam。
 - `extensions/scan-runner.ts.activeScans` — 非 seam — 模块级 Map;重用语义:扫描进程 exit 后条目保留至 status 确认终态,新会话加载时清空(以 state.json 为准恢复,不迁移)。
 - `extensions/scan-runner.ts.buildChildEnv` — 非 seam — 子进程环境构造(OPENAI 占位 + win32 TEMP/TMP 重定向);run-executor 复用;重用语义:纯函数(依赖 resolveCsStateDir,win32 下会 mkdir tmp-cred)。
+- `extensions/llm-wiring.ts.WEB_SEARCH_DISABLED_CODEX_ARG` — 非 seam — web_search 禁用覆盖常量(`web_search="disabled"`);buildWiring 与 run-executor scan 注入共用;重用语义:纯常量,cs --codex TOML 项格式。
 - `extensions/findings-parser.ts.summarizeFindings` — seam(签名含可注入 `csFindingsProvider`,见变更记录)。
 - `extensions/run-executor.ts.executeRun` — seam(门 2 详版化时新增,见变更记录)。
 - `extensions/run-executor.ts.CS_SUBCOMMAND_WHITELIST` — 非 seam — 模块级只读常量(全子命令清单 + 拒绝集);重用语义:不可变。
@@ -399,6 +400,11 @@ run 工具的可执行核心:白名单判定、前台执行、输出截断、超
 
 ## 变更记录
 
+- 扫描主线程 web_search 禁用注入(门 3 后实测缺陷 D,2026-10-19)
+  - 现象:mimo 网关真实扫描 preflight 即失败(`responses_feature_not_supported: tool type 'web_search' is not supported by this gateway`)。
+  - 根因(cs 0.3.0 源码核证):cs 对 validation/policy/dedup/remediation 四个辅助线程全部显式禁 web_search(api.js:289/3212/633/405),唯独扫描主线程(api.js:1304 startThread,threadOptions 与 scanRuntimeCodexConfig 均不设)继承 Codex 默认——默认带 web_search 工具;官方端点支持故无感,第三方 Responses 网关直接拒绝。
+  - 修复:buildWiring 的 codexArgs 无条件追加第 6 项 `web_search="disabled"`(官方端点上 disabled 亦合法,cs validate 路径同款;覆盖经 mergedCodexConfig deepMerge → scanRuntimeCodexConfig → sessionConfig → SDK config 直达扫描主线程,链路逐步核证)。`codex_security_run` 的 `command==="scan"` 同步自动补(用户显式传 web_search 覆盖时不重复注入);常量 `WEB_SEARCH_DISABLED_CODEX_ARG`(llm-wiring 导出)两处共用。
+  - 守卫:llm-wiring 期望键值对增 web_search 项(恰含断言 ×7 用例);run-executor 3 断言(scan 注入恰一次/非 scan 不注入/用户显式覆盖保留);mutation ×2(去 buildWiring 注入 7 红、去 run 注入 2 红)还原 92/92;mock 扫描实测 cs 接受该覆盖(exit 0)。
 - 真实模型调用暴露三缺陷修复(门 3 后实测 Session 01a15297 + Gate D 实测,2026-10-19)
   - 缺陷 A:模型把 `scope` 序列化为 JSON 字符串(TypeBox anyOf 拒绝),scan 工具真实调用三次全失败;且模型 fallback 到 run/bash 撞回 credential-home ACL 拦截。修复:scan 工具挂 `prepareArguments` 兼容 shim(字符串 scope 校验前还原为对象;非法 JSON 保持原样交校验)。
   - 缺陷 B:`executeRun` 的 spawn env 原为裸继承,win32 修复(TEMP 重定向、OPENAI 占位)只在 startScan;且 run 跑 `scan` 不带 `--auth api-key` 仍撞 cs auto 预检。修复:`executeRun` env 改走 `buildChildEnv`(scan-runner 导出),`command==="scan"` 且 args 无 `--auth` 时自动补 `--auth api-key`(用户显式传 --auth 时不重复注入)。

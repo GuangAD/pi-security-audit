@@ -157,7 +157,7 @@ function splitCodexArg(arg: string): [string, string] {
   return [arg.slice(0, eq), parseTomlBasicString(arg.slice(eq + 1))];
 }
 
-/** 独立构造的期望键值对(spec 后置条件:恰含 model_provider/name/base_url/wire_api/env_key 五类键) */
+/** 独立构造的期望键值对(spec 后置条件:恰含 model_provider/name/base_url/wire_api/env_key 五类键 + web_search 禁用,共六键) */
 function expectedCodexPairs(provider: string, baseUrl: string, envName: string): Map<string, string> {
   return new Map([
     ["model_provider", provider],
@@ -165,6 +165,7 @@ function expectedCodexPairs(provider: string, baseUrl: string, envName: string):
     [`model_providers.${provider}.base_url`, baseUrl],
     [`model_providers.${provider}.wire_api`, "responses"],
     [`model_providers.${provider}.env_key`, envName],
+    ["web_search", "disabled"],
   ]);
 }
 

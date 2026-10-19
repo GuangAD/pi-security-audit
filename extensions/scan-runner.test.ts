@@ -130,7 +130,7 @@ function makeStateDir(opts: { pid: number; report?: boolean; log?: string }): st
   return dir;
 }
 
-/** 接线 fixture(形状对齐 llm-wiring 输出:五类键 + 单键 env) */
+/** 接线 fixture(形状对齐 llm-wiring 输出:五类 provider 键 + web_search 禁用 + 单键 env) */
 const WIRING: LlmWiring = {
   codexArgs: [
     `model_provider="testprov"`,
@@ -138,6 +138,7 @@ const WIRING: LlmWiring = {
     `model_providers.testprov.base_url="https://llm.test/v1"`,
     `model_providers.testprov.wire_api="responses"`,
     `model_providers.testprov.env_key="TEST_ENV_KEY"`,
+    `web_search="disabled"`,
   ],
   env: { TEST_ENV_KEY: KEY },
   model: "test-model-1",

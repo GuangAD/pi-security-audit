@@ -280,6 +280,10 @@ describe("executeRun", () => {
     assert.ok(cap, "假 cs 应捕获调用");
     assert.equal(cap.argv[0], "scan", "argv[0] 应为子命令名");
     assert.deepEqual(cap.argv.slice(1, 3), ["--auth", "api-key"], "scan 命令应自动补 --auth api-key");
+    assert.ok(
+      cap.argv.includes("--codex") && cap.argv.includes(`web_search="disabled"`),
+      `scan 命令应自动补 web_search 禁用(实测缺陷:第三方 Responses 网关拒 web_search 工具),实际 ${JSON.stringify(cap.argv)}`,
+    );
     assert.equal(cap.openaiKey, "pi-codex-security-placeholder", "子进程应带 OPENAI_API_KEY 占位满足 cs auth 预检");
     if (process.platform === "win32") {
       assert.ok(cap.temp !== null && cap.temp.includes("tmp-cred"), `win32 下 TEMP 应指向权限收敛目录,实际 ${cap.temp}`);
@@ -290,10 +294,28 @@ describe("executeRun", () => {
     const fake = installFakeCs(t);
     const r1 = await executeRun("scan", ["--auth", "chatgpt", "--path", "."]);
     assert.ok("exitCode" in r1);
-    assert.deepEqual(fake.captures()[0].argv.slice(1, 3), ["--auth", "chatgpt"], "用户显式 --auth 应保留");
+    assert.ok(
+      fake.captures()[0].argv.includes("--auth") && fake.captures()[0].argv.includes("chatgpt"),
+      "用户显式 --auth 应保留",
+    );
+    assert.equal(
+      fake.captures()[0].argv.filter((a) => a === `web_search="disabled"`).length,
+      1,
+      "scan 仍应注入 web_search 禁用且恰一次",
+    );
     const r2 = await executeRun("info", []);
     assert.ok("exitCode" in r2);
     assert.ok(!fake.captures()[1].argv.includes("--auth"), "非 scan 命令不注入 --auth");
+    assert.ok(
+      !fake.captures()[1].argv.includes(`web_search="disabled"`),
+      "非 scan 命令不注入 web_search 禁用",
+    );
+  });
+  it("守卫补充 2:用户显式传 web_search 覆盖时 scan 不重复注入", async (t) => {
+    const fake = installFakeCs(t);
+    await executeRun("scan", ["--codex", `web_search="enabled"`]);
+    const injected = fake.captures()[0].argv.filter((a) => a === `web_search="disabled"`).length;
+    assert.equal(injected, 0, "用户显式 web_search 覆盖应保留,不重复注入禁用");
   });
   it("stderr 与 stdout 合并且保持到达顺序;超时外的正常退出不受 taskkill 影响", async (t) => {
     installFakeCs(t);

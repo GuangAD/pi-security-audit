@@ -70,6 +70,9 @@ function tomlValue(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
+/** web_search 禁用覆盖(cs --codex TOML 项):扫描主线程继承 Codex 默认会带 web_search 工具,第三方 Responses 网关不支持即拒;buildWiring 与 run-executor scan 注入共用 */
+export const WEB_SEARCH_DISABLED_CODEX_ARG = `web_search=${tomlValue("disabled")}`;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -143,6 +146,10 @@ function buildWiring(opts: {
       `model_providers.${n}.base_url=${tomlValue(opts.baseUrl)}`,
       `model_providers.${n}.wire_api=${tomlValue("responses")}`,
       `model_providers.${n}.env_key=${tomlValue(opts.envName)}`,
+      // web_search 禁用:cs 扫描主线程不设该键,继承 Codex 默认会带 web_search 工具,
+      // 第三方 Responses 网关(如 mimo)不支持即拒绝(preflight 失败);cs 自身四个辅助线程
+      // 全部显式禁用(api.js validate/policy/dedup/remediation),官方端点上 disabled 亦合法。
+      WEB_SEARCH_DISABLED_CODEX_ARG,
     ],
     env: { [opts.envName]: opts.key },
     model: opts.model,

@@ -10,6 +10,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 
 import { buildChildEnv, resolveCsSpawnTarget } from "./scan-runner.ts";
+import { WEB_SEARCH_DISABLED_CODEX_ARG } from "./llm-wiring.ts";
 
 // —— 白名单(cs --help 固化于 2026-10-16,24 个子命令) ——
 
@@ -141,8 +142,15 @@ export async function executeRun(
 
   const target = resolveCsSpawnTarget();
   // scan 命令补 --auth api-key:与 codex_security_scan 同源,避免真实扫描撞 cs auto 预检与 win32 credential-home ACL 拦截
+  // scan 命令补 --auth api-key:与 codex_security_scan 同源,避免真实扫描撞 cs auto 预检与 win32 credential-home ACL 拦截
   const scanAuthArgs = command === "scan" && !args.includes("--auth") ? ["--auth", "api-key"] : [];
-  const child = spawn(target.command, [...target.prefixArgs, command, ...scanAuthArgs, ...args], {
+  // scan 命令补 web_search 禁用:与 scan 工具接线同源(第三方 Responses 网关不支持 web_search 工具);
+  // 用户已显式传 web_search 覆盖(--codex web_search=...)时不重复注入,显式选择优先。
+  const scanWebSearchArgs =
+    command === "scan" && !args.some((arg) => arg.startsWith("web_search"))
+      ? ["--codex", WEB_SEARCH_DISABLED_CODEX_ARG]
+      : [];
+  const child = spawn(target.command, [...target.prefixArgs, command, ...scanAuthArgs, ...scanWebSearchArgs, ...args], {
     cwd: process.cwd(),
     env: buildChildEnv({}),
     stdio: ["ignore", "pipe", "pipe"],

@@ -2,8 +2,9 @@
 
 ## 当前状态
 
-- **进行中**:dev 重流程阶段 2——补全 spec.md 用例详版、切任务写 plan.md,过门 2 后进入阶段 3 开发。
+- **进行中**:dev 重流程门 3——全部 5 任务完成,最终报告已呈报,等待用户确认后收尾。
 - 门 1 已批准(2026-10-16):design.md + spec.md 骨架落盘并提交。
+- 门 2 已批准(2026-10-16):spec 用例详版 + plan.md 任务计划获批。
 
 ## 进行中事项
 
@@ -11,9 +12,9 @@
 
 ## 待确认
 
-- GLM 对 Codex effort 档位(默认 xhigh)的兼容性:Gate A 以 `--dry-run`/`--mock` 实测,失败降档固化。
-- Windows 下 cs `.cmd` 垫片与 detached 进程行为:Gate B 实测。
-
+- ~~GLM 对 Codex effort 档位兼容性~~ → 已验证(2026-10-16):真实 GLM-5.3 接受默认 `xhigh`,token 流正常无拒绝。
+- ~~Windows 下 cs `.cmd` 垫片与 detached 进程行为~~ → 已验证(2026-10-16):垫片解析直 spawn 保真 argv;detached+fd 直传 stdio,父进程退出后子进程日志仍完整(守卫测试钉住)。
+- **遗留(非阻塞)**:无。Windows 真实扫描三道环境拦截(auth 预检 / credential-home ACL / `--max-cost` 计量)已于 `c54b0b7` 实验固化解决。
 ## 最近完成
 
 - 2026-10-16 05:13 设计访谈与门 1:完成 dev 重流程阶段 1 访谈(模型跟随语义、全覆盖范围、凭证传递、后台+通知等 14 项决策收敛),写 design.md、spec.md 骨架、CONTEXT.md(10 词条)、ADR-0001/0002,用户批准门 1。验证方式:design-checklist 逐条自查通过,呈报文档用户确认。

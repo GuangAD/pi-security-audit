@@ -1,43 +1,38 @@
 # CONTEXT.md — 领域词汇表
 
-纯词汇表:每条回答「这个词在本项目中指什么」。零实现细节,实现契约见 docs/plans/。
+pi-security-audit 的领域术语。按需增补,不套模板。
 
-## cs / codex-security
+## 引擎模型(scan model)
 
-OpenAI 的代码安全扫描 CLI(npm 包 `codex-security`,本机 0.3.0),内嵌 Codex 0.162.1 作为推理引擎。本项目所有扫描能力的事实来源,PATH 中命令名 `cs`。
+执行审计 subagent 的 LLM 模型。解析顺序:配置(`~/.pi/agent/security-audit.json`)优先 → 会话模型回退 → 显式报错。与「会话模型」(用户日常对话用)刻意解耦——见 ADR-0003。
 
-反义/易混淆:cs ≠ Codex CLI 本体;cs 的扫描引擎是内嵌 Codex,但凭证、模型、端点由本包经 `--codex` 参数注入,与用户终端里的 Codex CLI 配置互不影响。
+## 编排 skill
 
-## 扫描引擎 LLM 接线(llm-wiring)
+描述审计工作流的方法论提示词(skills/security-audit*)。pi 主 agent 读它决定「派什么 subagent、按什么顺序、产物写哪」。源自 cs 的 core-scan 等文档(Apache 2.0)改写,改写规则 = spec 的 cs→pi 映射表。
 
-把「pi 会话当前模型 + 凭证」转换为 cs 扫描子进程可用的 provider 注入参数(`--codex` TOML 串)与环境变量的过程。唯一发生在 `extensions/llm-wiring.ts`。
+## 调查包(investigation packet)
 
-反义/易混淆:「扫描模型」指 cs 用的模型(跟随 /model),「会话模型」指 pi 对话用的模型——两者通常是同一个,但 scan 工具的 `modelOverride` 可临时分离。
+按攻击面分组的审计任务单元:共享同一攻击者/资产/入口/控制点的一组安全问题,交给一个调查员 subagent。源自 cs core-scan 的 packets 概念。
 
-## Responses 端点映射
+## 基线审计(baseline audit)
 
-Chat Completions 协议端点 → OpenAI Responses 协议端点的固定转换表。首期唯一条目:智谱 `open.bigmodel.cn/api/coding/paas/v4` → `open.bigmodel.cn/api/v1`。存在原因:cs 内嵌 Codex 只认 Responses 协议(Codex 0.162.1 移除 chat wire)。
+独立的第一遍全量审计,与调查包并行且互不知晓——防止单线程审计被早期假设锚定。cs 反误报机制的一部分。
 
-## 扫描专用覆盖配置
+## 产物四件套
 
-`<agent-dir>/codex-security.json`(agent-dir 由 `PI_CODING_AGENT_DIR` 决定,默认 `~/.pi/agent`),用户手工写的扫描模型/端点/凭证来源声明。生效条件:会话模型协议不兼容时才读取;它也没有 → 接线报错(不静默换模型)。
+一次审计的完整输出,位于被扫仓库 `.security-audit/<YYYYMMDD-HHmmss>/`:
 
-## 会话模型跟随
+- `scan-context.json` — 扫描上下文(mode/scope/base/model/时间戳),单一事实源。
+- `findings.json` — 发现列表,契约 = schemas/findings.schema.json。
+- `coverage.json` — 覆盖声明(含 rejected/deferred 处置),契约 = schemas/coverage.schema.json。
+- `report.md` — 人类可读报告(严重级别分组 + codeEvidence 证据条目)。
 
-扫描引擎动态读取 `pi.getModel()` 的行为;/model 切换后下一次扫描即用新模型。协议不兼容是该语义的唯一边界。
+另有 `checkpoints/<阶段>.json` 为各 subagent 阶段检查点(取代 cs 的 record_* MCP 工具)。
 
-## 透传(run)
+## 薄工具
 
-`codex_security_run` 工具把 cs 子命令原样转发执行的行为:前台运行、输出截断、退出码透传,不二次加工语义。白名单含 cs 全部子命令,仅排除 `login`/`logout`(凭证走 pi 路线,无需登录)与 `mcp`(官方排除扫描走 MCP)。
+插件注册的两个 pi 工具:`resolve_scan_model`(引擎模型解析)、`validate_scan_artifacts`(产物契约校验)。设计原则:代码只做「确定性计算」,方法论判断留给 agent。
 
-## 强纪律命令
+## cs→pi 映射表
 
-允许经工具调用、但 skill 写死「仅用户在对话中明确要求/确认后才执行」的命令:`patch`、`verify-fix`、`--patch`(改代码,确认后执行)、`publish`、`--create-pr`、`feedback`(写外部系统,仅明确要求)。
-
-## 扫描句柄(scanDir)
-
-scan 工具返回的产物目录绝对路径,后续 status 查询的唯一凭据。与扫描进程 pid 一起落盘在产物目录的 `state.json`,pi 会话重启后仍可凭它恢复查询。
-
-## Gate A / B / C
-
-三个验证关口:A = LLM 接线实测(--dry-run/--mock 无成本验证 GLM 兼容性,固化命令模板);B = 包集成验证(pi 加载扩展、工具全链路);C = 自然语言路由与汇报纪律验证。
+知识层改写的唯一机械规则(spec 编码方向):cs 的 codex 运行时 API(fork_turns/record_* MCP/followup_task 等)到 pi 机制(subagent 工具/写文件/新派 subagent)的一一对应。

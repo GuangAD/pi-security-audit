@@ -1,48 +1,51 @@
-# AGENTS.md — pi-codex-security
+# AGENTS.md — pi-security-audit
 
 ## 项目定位
 
-pi 包:在 pi agent 中全功能调用 codex-security CLI(cs),自然语言或 `/security-scan` 触发安全扫描;扫描引擎 LLM 自动接线(跟随会话模型),凭证零手工配置。以 `pi install` 安装交付。
+pi 原生安全审计插件:复用 codex-security(cs)的审计方法论与产物契约(Apache 2.0),以 skill 驱动架构跑在 pi 自己的 subagent 循环上。零 codex/cs 引擎依赖。以 `pi install` 安装交付。
+
+前身 pi-codex-security(cs 接线路线)已被证伪:两天真实使用暴露 4 类 codex 引擎层环境故障,详见 docs/plans/2026-10-19-security-audit-rewrite/design.md。
 
 ## 核心目录及职责
 
-- `extensions/index.ts` — 装配:注册 3 工具(scan/status/run)+ `/security-scan` 命令 + 完成通知。
-- `extensions/llm-wiring.ts` — 会话模型 → cs provider 注入参数与环境变量;唯一知道 pi 配置格式与协议映射的模块。
-- `extensions/scan-runner.ts` — 扫描进程生命周期:spawn/注册表/pid 落盘/状态查询;唯一触碰扫描进程与产物文件系统。
-- `extensions/findings-parser.ts` — 扫描产物 → 严重级别摘要;解析失败降级,不报假状态。
-- `skills/codex-security-scan/SKILL.md` — 触发路由 + 全命令参考 + 分级安全纪律。
-- `docs/plans/<日期>-<slug>/` — 设计文档(design/spec/plan);`docs/adr/` — 决策记录;`CONTEXT.md` — 领域词汇表。
+- `skills/security-audit/` — 主方法论 skill(paths 全库扫描模式):编排指令(基线审计/威胁建模/调查包/独立验证/报告)。
+- `skills/security-audit-diff/` — diff 扫描模式变体 skill。
+- `skills/security-audit-shared/` — 两模式共享 references(验证纪律/产物契约/报告格式)。
+- `extensions/index.ts` — 插件入口:注册两个薄工具(resolve_scan_model / validate_scan_artifacts)。
+- `extensions/scan-model.ts` — 引擎模型解析:配置优先 → 会话回退 → 显式报错。
+- `extensions/artifact-validator.ts` — 产物契约校验(轻量 JSON Schema 子集,零依赖)。
+- `schemas/` — 产物契约(从 cs 原样复制,Apache 2.0 版权标注保留)。
+- `docs/plans/2026-10-19-security-audit-rewrite/` — 本次重构的 design/spec/plan。
 
 ## 工作流导航
 
-dev 重流程(heavy track)进行中:门 1 已批准(2026-10-16),当前处于阶段 2(用例详版 + plan.md)。恢复中断用 `/dev-resume`,先重读 design.md、spec.md(含变更记录)与 plan.md。
+dev 重流程进行中:门 1、门 2 已批准(2026-10-19),当前处于阶段 3(任务 1 清场起)。恢复中断用 `/dev-resume`,先重读 design.md、spec.md(含变更记录)与 plan.md。
 
 ## 文档指针
 
-- 决策快照:`docs/plans/2026-10-16-pi-codex-security/design.md`(冻结,改动走回退协议)
-- 实现契约:`docs/plans/2026-10-16-pi-codex-security/spec.md`(演进须登记变更记录)
-- 难逆转决策:ADR-0001(LLM 跟随会话模型)、ADR-0002(专项 + 透传全覆盖架构)
+- 决策快照:`docs/plans/2026-10-19-security-audit-rewrite/design.md`(冻结,改动走回退协议)
+- 实现契约:`docs/plans/2026-10-19-security-audit-rewrite/spec.md`(演进须登记变更记录)
+- 开发计划与进度:`docs/plans/2026-10-19-security-audit-rewrite/plan.md`
+- 难逆转决策:ADR-0003(引擎模型配置优先)、ADR-0004(skill 驱动引擎);ADR-0001/0002 已被取代留档
 - 术语:CONTEXT.md
 
 ## 工程边界
 
 - TypeScript 由 pi 的 jiti 直跑:不设编译、不设 build 脚本。
-- 零第三方 npm 依赖:进程 `node:child_process`、文件 `node:fs`、schema 用宿主 typebox;宿主包只进 peerDependencies(range `*`)。
-- 外部依赖:cs CLI ≥ 0.3.0 在 PATH;缺失报可读错误,不代装。
-- **agent-dir 动态解析**:auth.json / models.json / 覆盖配置一律经 `resolveAgentDir()`(`PI_CODING_AGENT_DIR` → `~/.pi/agent` 回退),禁止硬编码路径。
-- **密钥红线**:API key 只经子进程环境变量传递;禁止出现在命令行参数、日志、落盘文件、错误消息。
-- 扫描产物用 cs 默认 state dir,不传 `--output-dir`(官方强制仓库外)。
-- 测试用 node:test 内置框架(零依赖),测试文件放 `extensions/*.test.ts`。
+- 零第三方 npm 依赖;宿主包只进 peerDependencies。
+- 运行前提:pi 环境具备 subagent 能力(pi-subagents);skill 内声明降级路径。
+- 扫描产物写被扫仓库 `.security-audit/<时间戳>/`(已 gitignore),不写 agent-dir。
+- cs 知识层资产(Apache 2.0)忠实改写:仅替换运行时 API 调用点(映射表见 spec 编码方向),不精简方法论。
+- 测试用 node:test 内置框架,文件放 `extensions/*.test.ts`(目录形式 `node --test extensions/` 在本机 Node v24 不可用)。
 
 ## 执行纪律
 
-- 不静默换模型:接线失败显式报错(ADR-0001),永不自动回退。
-- `session_shutdown` 只清注册表与监听,不杀扫描进程。
-- 行为契约以 spec.md 为准;改 spec 必须登记变更记录;触及 design 决策走回退协议。
-- commit 中文信息,前缀 `feat:` / `fix:` / `docs:` / `chore:` 等,说明改了什么、原因、影响。
+- 损坏配置显式报错,不静默降级(ADR-0003)。
+- 不发明宿主没有的 API:pi 扩展只依赖经过实测的宿主接口。
+- commit 中文信息,前缀 `feat:` / `fix:` / `docs:` / `chore:`,说明改了什么、原因、影响。
 
 ## 验证入口
 
 - 加载:`pi -e ./`(一次性试用,无报错即通过)。
-- 单测:`node --test extensions/*.test.ts`(node:test,覆盖 spec 全部 pinned case 与数值预算;目录形式 `node --test extensions/` 在本机 Node v24 不可用,已实测修正)。
-- Gate A:LLM 接线实测(cs `--dry-run` / `--mock`);Gate B:包集成(pi 加载 + 工具全链路);Gate C:自然语言路由与汇报纪律。
+- 单测:`node --experimental-strip-types --test extensions/*.test.ts`。
+- 端到端:样本仓库(fixture:硬编码密钥 + SQL 拼接)两模式跑通,产物过 validate_scan_artifacts。

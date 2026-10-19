@@ -1,11 +1,10 @@
 {
-  "name": "pi-codex-security",
-  "version": "0.1.0",
-  "description": "在 pi 中全功能调用 codex-security 安全扫描",
+  "name": "pi-security-audit",
+  "version": "0.2.0",
+  "description": "pi 原生安全审计:复用 codex-security 方法论(Apache 2.0),skill 驱动 subagent 审计,零 codex 引擎依赖",
   "type": "module",
   "keywords": ["pi-package"],
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "typebox": "*"
+    "@earendil-works/pi-coding-agent": "*"
   }
 }

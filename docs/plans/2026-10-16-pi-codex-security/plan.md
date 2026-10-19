@@ -27,8 +27,8 @@ TDD waiver 预登记:
 - [x] 任务 1:llm-wiring——LLM 接线模块(commit: 6eb838a )
 - [x] 任务 2:scan-runner——扫描进程生命周期(commit: f3f1b73 )
 - [x] 任务 3:findings-parser——产物解析摘要(commit: 13f7fbd )
-- [ ] 任务 4:run-executor + index 装配——工具层与包骨架(commit: ____ )
-- [ ] 任务 5:SKILL.md + Gate A/B/C 验证(commit: ____ )
+- [x] 任务 4:run-executor + index 装配——工具层与包骨架(commit: db0fc5c )
+- [x] 任务 5:SKILL.md + Gate A/B/C 验证(commit: 971219b )
 
 ## 任务详情
 
@@ -144,3 +144,19 @@ TDD waiver 预登记:
     1. findings.json 真实格式:顶层 {documentType, findings, scanId, schemaVersion},severity/confidence 均为嵌套对象 {level: ...};实现按此提取,未知 level 宁缺勿错。
     2. 任务 4 装配层注入真实 cs findings --json 包装即可走第一级;不传 opts 即手解析默认路径,二者共用 summarizeFindingsDoc 摘要逻辑;status 工具对 report.md 只能经 degraded.reportPath 呈现,不会有 source="report-md" 的 summary。
     3. 排序稳定性靠显式次关键字(原序下标),不依赖引擎 sort 稳定性。
+- 任务 4 | 完成 | commit db0fc5c
+  - BASE:4fd9b30(controller 收尾提交后)
+  - 评审:独立评审放行,发现 pi 扩展 API 三处契约偏离已修(registerTool 单对象含 name/label/parameters;execute 返回 content: (TextContent|ImageContent)[] + 必填 details;session_shutdown 走 pi.on 而非 registerCommand)。implementer 多次失败(钻宿主源码、反复变异工具失败),controller 按 fallback 会话内收尾:读 pi 真实类型定义后系统性修正 index.ts(加 TextBlock 类型与 textOf 帮助函数,9 处返回与断言对齐)。
+  - 变更记录:已登记(run-executor 模块从 index.ts 独立;summarizeFindings 注入 provider;session_shutdown 事件挂载)。
+  - 结论:
+    1. pi 扩展 API 契约:registerTool 收单对象含 name/label/description/parameters(TypeBox);execute 返回 {(content: (TextContent|ImageContent)[], details, structuredContent?, isError?)};session_shutdown 用 pi.on("session_shutdown", handler) 而非 registerCommand。
+    2. 三工具已在真实宿主注册(pi -e 确认),index.test 16/16 全绿。
+- 任务 5 | 完成 | commit 971219b
+  - BASE:db0fc5c
+  - 评审:SKILL.md 目测清单 6 条逐条过(触发词节、命令参考表覆盖 cs 全部 24 子命令、三级执行纪律、官方 skills 提醒、跨会话边界、解读纪律);deep 模式 96h 警示在路由表与工具用法两处硬性注明;全中文正文;未写未实现功能。
+  - Gate A 复核:✅ 命令模板 exit 0,cs 正确解析(model: glm-5.3 / modelProvider: zai / reasoningEffort: xhigh),与任务 1 固化结论一致。
+  - Gate B 机检:`pi install ./` + `pi list` 成功;`--mock` 全链路通(产物/状态机/findings 全生成,exit 0);86/86 全绿无回归;密钥零泄漏(两个 grep 空);SKILL.md 零硬编码密钥。**阻塞项(如实记录)**:真实 LLM 扫描卡在 Windows 凭证 home 权限(cs 内嵌 Codex 建认证临时目录被本机 Windows ACL 拒,exit 0 且无 LLM 输出)。这是环境限制(与 pi 会话模型无关,pi 自身连 Z.ai 正常),非代码缺陷,不影响 `--mock` 全链路与命令模板。GLM xhigh 的 LLM 侧兼容性留待真实 LLM 环境下验证。
+  - Gate C 机检:`pi -e` 真实加载 → 自然语言「安全扫描工具」正确识别并描述三工具(证明 skill + 扩展在宿主中真实加载并路由)。
+  - 结论:
+    1. SKILL.md 可直接作 Gate C 自然语言路由脚本(路由表 5 行与 scanSchema 字段名已对齐)。
+    2. Windows 凭证 home 是 cs 内嵌 Codex 的认证准备步骤,与 pi 会话模型无关;pi 自身连 Z.ai 正常,不阻塞本包功能。

@@ -20,7 +20,7 @@ pi-security-audit 的领域术语。按需增补,不套模板。
 
 ## 产物四件套
 
-一次审计的完整输出,位于被扫仓库 `.security-audit/<YYYYMMDD-HHmmss>/`:
+一次审计的完整输出,位于被扫仓库 `.security-audit/<TS>/`(`TS` = `date +%Y%m%d-%H%M%S` 本地时间):
 
 - `scan-context.json` — 扫描上下文(mode/scope/base/model/时间戳),单一事实源。
 - `findings.json` — 发现列表,契约 = schemas/findings.schema.json。

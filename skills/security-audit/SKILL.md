@@ -15,7 +15,7 @@ description: 对当前仓库或指定目录做一次证据支撑的安全审计(
 ## 编排步骤
 
 1. **定引擎模型**:调用 `resolve_scan_model` 工具。ok → 记下 provider/model,后续所有 subagent 派发显式带此模型;错误 → 把 detail 原文展示给用户,终止(不得自行猜模型)。
-2. **建产物目录**:`.security-audit/<YYYYMMDD-HHmmss>/`(被扫仓库根下,时间戳本地时间),内含 `checkpoints/` 子目录。写 `scan-context.json`:`{mode:"scoped_path", scope, model, provider, modelSource, startedAt}`——`modelSource` 取值仅 `"config"|"session"`(与 resolve_scan_model 返回的 source 字段一致),`startedAt` 为 ISO 8601 本地时间。**先写文件再继续**:步骤 2 完成的标志是 `scan-context.json` 已存在于磁盘(写后 `ls` 确认),不得仅在回复中描述内容。本文件是单一事实源,所有 worker 简报都引用它。字段取值以本条为准,无需向用户确认。
+2. **建产物目录**:`.security-audit/<TS>/`(被扫仓库根下),`TS` 用命令 `date +%Y%m%d-%H%M%S` 的输出(bash date 默认本地时区;**禁用** `date -u`/UTC)。内含 `checkpoints/` 子目录。写 `scan-context.json`:`{mode:"scoped_path", scope, model, provider, modelSource, startedAt}`——`modelSource` 取值仅 `"config"|"session"`(与 resolve_scan_model 返回的 source 字段一致),`startedAt` 为 ISO 8601 含本地时区偏移(如 `2026-10-19T18:27:17+08:00`)。**先写文件再继续**:步骤 2 完成的标志是 `scan-context.json` 已存在于磁盘(写后 `ls` 确认),不得仅在回复中描述内容。本文件是单一事实源,所有 worker 简报都引用它。字段取值以本条为准,无需向用户确认。
 3. **预检**:确认目标路径存在;读 `../security-audit-shared/references/security-guidance.md` 并解析嵌套 `SECURITY.md`(bash 逐级向上找,根到叶拼接,近者优先)。
 4. **派基线审计**(有 subagent 能力时):按 `../security-audit-shared/references/core-scan.md` Workflow 第 2 步——独立 subagent,只给基线审计员提示词与仓库路径/scope/上下文,**不给你的威胁假设**。同时(并行)进入第 5 步。基线结果写 `checkpoints/baseline.json`。
 5. **威胁建模**:按 `../security-audit-shared/references/threat-model.md` 生成 canonical threatModel;可用即写 `checkpoints/threat-model.json`(complete:false)。从模型推导「调查包」(共享攻击者/资产/入口/控制点的问题分组,见 core-scan 第 4 步)。

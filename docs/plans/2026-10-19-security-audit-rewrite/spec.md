@@ -22,7 +22,7 @@
 ### 产物目录布局(被扫仓库内)
 
 ```text
-.security-audit/<YYYYMMDD-HHmmss>/
+.security-audit/<TS>/  (TS = date +%Y%m%d-%H%M%S,本地时区,禁用 UTC)
 ├── scan-context.json    # 扫描上下文:mode/scope/base/model/时间戳
 ├── findings.json        # 符合 schemas/findings.schema.json
 ├── coverage.json        # 符合 schemas/coverage.schema.json
@@ -178,6 +178,9 @@
 ## 变更记录
 
 
+- 产物目录时间戳明确为本地时区命令(门 3 用户反馈)
+  - 原因:端到端实测 agent 用了 UTC 时间戳(SKILL 只写「本地时间」属软约束);改为确定性命令 date +%Y%m%d-%H%M%S 并显式禁用 date -u
+  - 影响:SKILL×2/artifact-contract/CONTEXT 同步;格式 YYYYMMDD-HHmmss 不变(Windows 文件名安全),仅时区语义钉死
 - resolveScanModel 错误字段语义修正(任务 2)
   - 原因:骨架期用例期望「reason 含损坏配置」为粗略表述;实现确定契约 reason=机器码(config-corrupt/no-model),detail=人类可读文案(含补救指引)
   - 影响:用例 3/4/5 的断言目标由 reason 改为 reason 相等 + detail 正则;对外行为不变(ok:false 与文案语义均保留)

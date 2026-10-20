@@ -4,7 +4,7 @@
 
 ## Directory Layout
 
-One audit owns one directory: `<repository>/.security-audit/<YYYYMMDD-HHmmss>/`. The orchestrator creates it before dispatching workers and records its absolute path in every worker brief. Never invent or guess scan IDs; the directory name is the human-visible scan identity, while `scanId` inside JSON documents is the machine identity (stable, lowercase, derived from the target and timestamp).
+One audit owns one directory: `<repository>/.security-audit/<TS>/`, where `<TS>` is the local-time output of `date +%Y%m%d-%H%M%S` (never UTC). The orchestrator creates it before dispatching workers and records its absolute path in every worker brief. Never invent or guess scan IDs; the directory name is the human-visible scan identity, while `scanId` inside JSON documents is the machine identity (stable, lowercase, derived from the target and timestamp).
 
 ```text
 .security-audit/<ts>/

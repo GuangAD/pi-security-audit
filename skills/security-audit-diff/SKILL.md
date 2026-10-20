@@ -22,7 +22,7 @@ description: 对一次变更做安全审计:指定 commit、分支差异或工�
 ## 编排步骤
 
 1. 调用 `resolve_scan_model`(同 paths 模式;错误即终止并展示 detail)。
-2. 建 `.security-audit/<YYYYMMDD-HHmmss>/` + `checkpoints/`;写 `scan-context.json`:`{mode:"diff", diffTarget, base, scope:".", model, provider, modelSource, startedAt}`。
+2. 建 `.security-audit/<TS>/` + `checkpoints/`,`TS` 用命令 `date +%Y%m%d-%H%M%S` 的输出(bash date 默认本地时区;**禁用** `date -u`/UTC)。写 `scan-context.json`:`{mode:"diff", diffTarget, base, scope:".", model, provider, modelSource, startedAt}`。
 3. 构造变更清单:`git diff --name-status`(按 diffTarget 取 base),写 `checkpoints/inventory.json`;删除文件记录 base 修订。
 4. 按 `../security-audit-shared/references/security-guidance.md` 解析嵌套 SECURITY.md。
 5. 派变更审阅者(并行,按文件分组):每组拿清单子集 + base 修订读取指引;结果写 `checkpoints/investigators/<group>.json`。

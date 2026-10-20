@@ -102,3 +102,10 @@ test("附:loadScanConfig 三态直测(absent/ok/corrupt)", () => {
   fs.writeFileSync(bad, "[1,2]", "utf8");
   assert.equal(loadScanConfig(bad).state, "corrupt");
 });
+
+test('守卫 cand-04:不可读(目录/EISDIR 等非 ENOENT)→ corrupt,不静默回退', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-'));
+  const r = resolveScanModel(dir, SESSION); // 目录当文件读 → 非 ENOENT 错误
+  assert.equal(r.ok, false, '非 ENOENT 读错误必须显式报错');
+  if (!r.ok) assert.equal(r.reason, 'config-corrupt');
+});

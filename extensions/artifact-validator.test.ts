@@ -1,6 +1,7 @@
 /** artifact-validator 契约测试(spec:validateFindings 7 例 + validateCoverage 3 例 + 覆盖声明) */
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import os from 'node:os';
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -196,4 +197,14 @@ test("C3 deferred 类型错报错(应为数组)", () => {
   const r = validateCoverage(minCoverageDoc({ deferred: "none" }));
   assert.equal(r.ok, false);
   if (!r.ok) assert.ok(r.errors.some((e) => e.path.includes("deferred")));
+});
+
+// —— 自审守卫(2026-10-20 findings #1/#5) ——
+test('守卫 cand-01:循环 $ref schema 不崩溃,返回 ok:false(结构违规)', (t) => {
+  const cyc = { type: 'object', properties: { a: { '$ref': '#/$defs/x' } }, '$defs': { x: { '$ref': '#/$defs/x' } } };
+  const cycPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'guard-')), 'cyc.json');
+  fs.writeFileSync(cycPath, JSON.stringify(cyc), 'utf8');
+  t.after(() => fs.rmSync(cycPath, { force: true }));
+  const r = validateAgainstSchema({ a: 1 }, cycPath);
+  assert.equal(r.ok, false, '循环 $ref 必须结构违规而非抛 RangeError');
 });

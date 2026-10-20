@@ -20,7 +20,7 @@ description: 对当前仓库或指定目录做一次证据支撑的安全审计(
 4. **派基线审计**(有 subagent 能力时):按 `../security-audit-shared/references/core-scan.md` Workflow 第 2 步——独立 subagent,只给基线审计员提示词与仓库路径/scope/上下文,**不给你的威胁假设**。同时(并行)进入第 5 步。基线结果写 `checkpoints/baseline.json`。
 5. **威胁建模**:按 `../security-audit-shared/references/threat-model.md` 生成 canonical threatModel;可用即写 `checkpoints/threat-model.json`(complete:false)。从模型推导「调查包」(共享攻击者/资产/入口/控制点的问题分组,见 core-scan 第 4 步)。
 6. **派调查包**(并行,数量按包的独立性裁量):每个调查员只拿自己的包 + 必要上下文(不含其他调查员提示词)。结果逐包写 `checkpoints/investigators/<packet-id>.json`。
-7. **汇总候选**:合并基线与调查员发现——只合并「同一被破坏控制 + 同一有效修复」的观察;保留全部受影响路径;共享 CWE 不构成合并理由。写 `checkpoints/scan-draft.json`(complete:false,候选带稳定 candidateId,待验证候选进 coverage.deferred)。
+7. **汇总候选**:合并基线与调查员发现——只合并「同一被破坏控制 + 同一有效修复」的观察;保留全部受影响路径;共享 CWE 不构成合并理由。**先落盘再验证**:写 `checkpoints/scan-draft.json`(complete:false,候选带稳定 candidateId,待验证候选进 coverage.deferred)并确认文件存在后,才允许进入步骤 8;跳过此步视同编排违规。
 8. **独立验证**:按 `../security-audit-shared/references/validation-guidance.md` 逐候选验证(最强可行方法:真实接口复现 > PoC > 聚焦测试 > 静态追踪)。每候选一份 `checkpoints/validations/<candidateId>.json` 回执;拒绝必须给 source-backed 反证。逐决策更新 scan-draft。
 9. **出正式产物**:`findings.json` + `coverage.json`(契约见 `../security-audit-shared/references/artifact-contract.md` 与 `../schemas/`;字段语义见 `../security-audit-shared/references/finding-detail-fields.md`);调 `validate_scan_artifacts` 校验两份 JSON——失败必须修复后重验,**不得带病出报告**。
 10. **写报告**:按 `../security-audit-shared/references/final-report.md` 结构写 `report.md`(含 Reviewed Surfaces 与 Open Questions);threatmodel.md 从 canonical threatModel 投影。
@@ -33,6 +33,12 @@ description: 对当前仓库或指定目录做一次证据支撑的安全审计(
 - 发现不自动修复:只审计与报告,修复是独立请求。
 - 证据必须 path:line 锚定;引用必须逐条核对(见 threat-model 第 5 步)。
 - **checkpoint 是文件,不是回复文本**:凡标注「写 checkpoints/...」的步骤,完成标志都是文件已落盘(必要时 ls 确认);在回复里复述 JSON 内容不算完成。
+
+## 已知限制(实测摩擦,2026-10-20 自审)
+
+- 编排者容易跳过「汇总先落盘」直接进验证(实测发生)——步骤 7 已改为硬性门槛,执行时自检。
+- 小仓库/短会话场景下,威胁建模与调查员轮可能被编排者以「比例性」省略——省略必须在报告 Scope 节声明,不得静默。
+- 编排者自提候选时不得自行验证(自证偏差);无第二验证人时,该候选降级为 Open Question 或显式标注「编排者自验」。
 
 ## 中断与恢复
 

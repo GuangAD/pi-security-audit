@@ -51,8 +51,10 @@ export function loadScanConfig(configPath?: string): LoadScanConfigResult {
   let raw: string;
   try {
     raw = fs.readFileSync(target, "utf8");
-  } catch {
-    return { state: "absent" };
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return { state: "absent" };
+    // 自审 cand-04:非 ENOENT(权限/目录等)必须显式暴露,不静默回退会话模型(ADR-0003)
+    return { state: "corrupt", reason: `损坏配置:security-audit.json 不可读(${(e as NodeJS.ErrnoException).code ?? "未知错误"})` };
   }
   let parsed: unknown;
   try {

@@ -42,6 +42,15 @@ export function loadSchema(schemaPath: string): Schema {
   return schema;
 }
 
+/** $ref 解引用链深度上限(防构造 schema 打爆调用栈;自审 cand-01) */
+const MAX_REF_DEPTH = 64;
+
+/** 截断回显值(错误消息不携带完整不可信数据;自审 cand-03) */
+function echo(value: unknown, max = 200): string {
+  const s = JSON.stringify(value) ?? String(value);
+  return s.length > max ? s.slice(0, max) + "…(截断)" : s;
+}
+
 /** 类型名 → 实际 JS 值判定(JSON Schema 类型语义) */
 function matchesType(value: unknown, type: string): boolean {
   switch (type) {
@@ -74,15 +83,27 @@ function resolveRef(root: Schema, ref: string): Schema | null {
 }
 
 /** 递归校验:违规全部收集(path 为 JSON 路径;根为 "$") */
-function validateNode(value: unknown, schema: Schema, root: Schema, path: string, errors: ValidationError[]): void {
-  // $ref 解引用(遇循环引用由调用方 schema 自身保证,此处按一层解析)
+function validateNode(value: unknown, schema: Schema, root: Schema, path: string, errors: ValidationError[], seen: Set<string> = new Set(), depth = 0): void {
+  // $ref 解引用:循环引用与超深链按结构违规处理,不递归打爆调用栈(自审 cand-01)
   if (typeof schema.$ref === "string") {
+    const m2 = /^#\/($defs|definitions)\/([^/]+)$/.exec(schema.$ref);
+    const refKey = m2 ? m2[1] + "/" + m2[2] : schema.$ref;
+    if (m2 && seen.has(refKey)) {
+      errors.push({ path, message: `循环 $ref(已在解引用链上): ${schema.$ref}` });
+      return;
+    }
+    if (depth >= MAX_REF_DEPTH) {
+      errors.push({ path, message: `$ref 链深超上限 ${MAX_REF_DEPTH}` });
+      return;
+    }
     const target = resolveRef(root, schema.$ref);
     if (target === null) {
       errors.push({ path, message: `校验器不支持的外部 $ref:${schema.$ref}` });
       return;
     }
-    validateNode(value, target, root, path, errors);
+    const nextSeen = new Set(seen);
+    nextSeen.add(refKey);
+    validateNode(value, target, root, path, errors, nextSeen, depth + 1);
     return;
   }
   const type = schema.type;
@@ -91,12 +112,12 @@ function validateNode(value: unknown, schema: Schema, root: Schema, path: string
     return;
   }
   if ("const" in schema && value !== schema.const) {
-    errors.push({ path, message: `值必须为常量 ${JSON.stringify(schema.const)},实际 ${JSON.stringify(value)}` });
+    errors.push({ path, message: `值必须为常量 ${JSON.stringify(schema.const)},实际 ${echo(value)}` });
     return;
   }
   const enumValues = schema.enum;
   if (Array.isArray(enumValues) && !enumValues.some((v) => v === value)) {
-    errors.push({ path, message: `值 ${JSON.stringify(value)} 不在枚举 [${enumValues.map((v) => JSON.stringify(v)).join(", ")}] 内` });
+    errors.push({ path, message: `值 ${echo(value)} 不在枚举 [${enumValues.map((v) => JSON.stringify(v)).join(", ")}] 内` });
     return;
   }
   if (typeof value === "string") {
@@ -114,7 +135,7 @@ function validateNode(value: unknown, schema: Schema, root: Schema, path: string
     }
   }
   if (Array.isArray(value) && schema.items && typeof schema.items === "object") {
-    value.forEach((item, i) => validateNode(item, schema.items as Schema, root, `${path}[${i}]`, errors));
+    value.forEach((item, i) => validateNode(item, schema.items as Schema, root, `${path}[${i}]`, errors, seen, depth));
   }
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
     const required = Array.isArray(schema.required) ? (schema.required as string[]) : [];
@@ -124,7 +145,7 @@ function validateNode(value: unknown, schema: Schema, root: Schema, path: string
     const props = schema.properties;
     if (props && typeof props === "object") {
       for (const [key, sub] of Object.entries(props as Record<string, Schema>)) {
-        if (key in value) validateNode(value[key], sub, root, `${path}.${key}`, errors);
+        if (key in value) validateNode(value[key], sub, root, `${path}.${key}`, errors, seen, depth);
       }
     }
   }
@@ -139,13 +160,18 @@ export function validateAgainstSchema(doc: unknown, schemaPath: string): Validat
 }
 
 /** findings.json 契约校验(缺省 schema = 插件内 schemas/findings.schema.json) */
+function pluginSchemaPath(name: string): string {
+  // 自审 cand-05:dirname 缺失显式失败,不信任 CWD(被扫仓库可预置同名 schema 冒充契约)
+  const dir = import.meta.dirname;
+  if (!dir) throw new SchemaLoadError("无法定位插件 schemas 目录(import.meta.dirname 不可用)");
+  return path.join(dir, "..", "schemas", name);
+}
+
 export function validateFindings(doc: unknown, schemaPath?: string): ValidationResult {
-  const p = schemaPath ?? path.join(import.meta.dirname ?? ".", "..", "schemas", "findings.schema.json");
-  return validateAgainstSchema(doc, p);
+  return validateAgainstSchema(doc, schemaPath ?? pluginSchemaPath("findings.schema.json"));
 }
 
 /** coverage.json 契约校验(缺省 schema = 插件内 schemas/coverage.schema.json) */
 export function validateCoverage(doc: unknown, schemaPath?: string): ValidationResult {
-  const p = schemaPath ?? path.join(import.meta.dirname ?? ".", "..", "schemas", "coverage.schema.json");
-  return validateAgainstSchema(doc, p);
+  return validateAgainstSchema(doc, schemaPath ?? pluginSchemaPath("coverage.schema.json"));
 }

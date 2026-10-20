@@ -80,12 +80,16 @@ export function registerSecurityAudit(pi: PiSurface): void {
     parameters: validateArtifactsSchema,
     execute: async (_id, params, _signal, _onUpdate, _ctx) => {
       const p = params as { kind: "findings" | "coverage"; path: string };
+      // 自审 cand-02:kind 白名单不单点依赖宿主 TypeBox 校验
+      if (p.kind !== "findings" && p.kind !== "coverage") {
+        return { content: [{ type: "text", text: `kind 必须为 findings 或 coverage,实际 ${JSON.stringify((params as { kind?: unknown }).kind)}` }], details: undefined, isError: true };
+      }
       let doc: unknown;
       try {
         doc = JSON.parse(fs.readFileSync(p.path, "utf8"));
       } catch (e) {
         return {
-          content: [{ type: "text", text: `无法读取产物文件:${p.path}(${(e as Error).message})` }],
+          content: [{ type: "text", text: `无法读取产物文件:${p.path}(文件缺失或不是合法 JSON;详情用只读工具查看)` }],
           details: undefined,
           isError: true,
         };

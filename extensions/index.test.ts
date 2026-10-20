@@ -92,3 +92,11 @@ test("resolve_scan_model 冒烟:损坏配置 → isError 且 detail 透传", asy
   assert.match(r.content[0].text, /损坏配置/);
   delete process.env.PI_CODING_AGENT_DIR;
 });
+
+test('守卫 cand-02:kind 白名单——非法 kind 返回 isError 且不读文件', async () => {
+  const pi = new StubPi();
+  registerSecurityAudit(pi);
+  const r = await callTool(pi, 'validate_scan_artifacts', undefined, { kind: '../../etc/passwd', path: 'x.json' });
+  assert.equal(r.isError, true);
+  assert.match(r.content[0].text, /kind 必须为/);
+});

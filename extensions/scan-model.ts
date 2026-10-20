@@ -3,6 +3,7 @@
  * 数据来源:<agent-dir>/security-audit.json(缺省)或 configPath 注入(测试)。
  */
 import fs from "node:fs";
+import { echo } from "./artifact-validator.ts";
 import os from "node:os";
 import path from "node:path";
 
@@ -71,7 +72,7 @@ export function loadScanConfig(configPath?: string): LoadScanConfigResult {
   }
   const slash = obj.model.indexOf("/");
   if (slash <= 0 || slash === obj.model.length - 1) {
-    return { state: "corrupt", reason: `损坏配置:model 必须为 provider-id/model-id 形式,实际 "${obj.model}"` };
+    return { state: "corrupt", reason: `损坏配置:model 必须为 provider-id/model-id 形式,实际 ${echo(obj.model)}` };
   }
   return {
     state: "ok",

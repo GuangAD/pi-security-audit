@@ -208,3 +208,28 @@ test('守卫 cand-01:循环 $ref schema 不崩溃,返回 ok:false(结构违规)'
   const r = validateAgainstSchema({ a: 1 }, cycPath);
   assert.equal(r.ok, false, '循环 $ref 必须结构违规而非抛 RangeError');
 });
+
+// —— 重验守卫(2026-10-20 cand-08/09/10) ——
+test('守卫 cand-08:深嵌套值不再抛 RangeError(echo 退化描述)', () => {
+  const deep = (n) => { let v = 'x'; for (let i = 0; i < n; i++) v = [v]; return v; };
+  const sch = { type: 'object', properties: { a: { enum: ['ok'] } }, required: ['a'] };
+  const p = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'guard-')), 'deep.json');
+  fs.writeFileSync(p, JSON.stringify(sch), 'utf8');
+  const r = validateAgainstSchema({ a: deep(50000) }, p);
+  assert.equal(r.ok, false, 'enum 违规仍应报错');
+});
+
+test('守卫 cand-09:数组形式 type 生效(不匹配值被拦)', () => {
+  const sch = { type: 'object', properties: { v: { type: ['string', 'object'] } }, required: ['v'] };
+  const p = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'guard-')), 'arrtype.json');
+  fs.writeFileSync(p, JSON.stringify(sch), 'utf8');
+  const r = validateAgainstSchema({ v: 12345 }, p);
+  assert.equal(r.ok, false, 'number 穿过 [string,object] 必须被拦');
+});
+
+test('守卫 cand-10:startLine 违反 minimum 被拦', () => {
+  const f = minFinding({ locations: [{ path: 'a.js', startLine: 0 }] });
+  const r = validateFindings(minFindingsDoc([f]));
+  assert.equal(r.ok, false, 'startLine 0 违反 minimum:1 必须被拦');
+  if (!r.ok) assert.ok(r.errors.some((e) => e.path.includes('startLine')));
+});

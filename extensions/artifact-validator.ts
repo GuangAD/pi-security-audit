@@ -45,9 +45,14 @@ export function loadSchema(schemaPath: string): Schema {
 /** $ref 解引用链深度上限(防构造 schema 打爆调用栈;自审 cand-01) */
 const MAX_REF_DEPTH = 64;
 
-/** 截断回显值(错误消息不携带完整不可信数据;自审 cand-03) */
-function echo(value: unknown, max = 200): string {
-  const s = JSON.stringify(value) ?? String(value);
+/** 截断回显值(错误消息不携带完整不可信数据;自审 cand-03)。stringify 失败(深嵌套/循环)退化为类型+长度描述(重验 cand-08) */
+export function echo(value: unknown, max = 200): string {
+  let s: string;
+  try {
+    s = JSON.stringify(value) ?? String(value);
+  } catch {
+    return `(${typeof value}, 不可序列化)`;
+  }
   return s.length > max ? s.slice(0, max) + "…(截断)" : s;
 }
 
@@ -107,7 +112,13 @@ function validateNode(value: unknown, schema: Schema, root: Schema, path: string
     return;
   }
   const type = schema.type;
-  if (typeof type === "string" && !matchesType(value, type)) {
+  // 数组形式 type(JSON Schema 联合类型):任一命中即通过,全不命中报错(自审 cand-09)
+  if (Array.isArray(type)) {
+    if (!type.some((t) => typeof t === "string" && matchesType(value, t))) {
+      errors.push({ path, message: `类型应为 ${type.join("|")} 之一,实际 ${Array.isArray(value) ? "array" : typeof value}` });
+      return;
+    }
+  } else if (typeof type === "string" && !matchesType(value, type)) {
     errors.push({ path, message: `类型应为 ${type},实际 ${Array.isArray(value) ? "array" : typeof value}` });
     return;
   }
@@ -134,13 +145,32 @@ function validateNode(value: unknown, schema: Schema, root: Schema, path: string
       errors.push({ path, message: `字符串不匹配 pattern ${pattern}` });
     }
   }
-  if (Array.isArray(value) && schema.items && typeof schema.items === "object") {
-    value.forEach((item, i) => validateNode(item, schema.items as Schema, root, `${path}[${i}]`, errors, seen, depth));
+  if (typeof value === "number") {
+    // 数值约束(自审 cand-10)
+    const minimum = schema.minimum;
+    if (typeof minimum === "number" && value < minimum) {
+      errors.push({ path, message: `数值 ${value} 小于 minimum ${minimum}` });
+    }
+    const maximum = schema.maximum;
+    if (typeof maximum === "number" && value > maximum) {
+      errors.push({ path, message: `数值 ${value} 大于 maximum ${maximum}` });
+    }
+  }
+  if (Array.isArray(value)) {
+    // 条数约束(自审 cand-10)
+    const minItems = schema.minItems;
+    if (typeof minItems === "number" && value.length < minItems) {
+      errors.push({ path, message: `数组长度 ${value.length} 小于 minItems ${minItems}` });
+    }
+    if (schema.items && typeof schema.items === "object") {
+      value.forEach((item, i) => validateNode(item, schema.items as Schema, root, `${path}[${i}]`, errors, seen, depth));
+    }
   }
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
     const required = Array.isArray(schema.required) ? (schema.required as string[]) : [];
     for (const key of required) {
-      if (!(key in value)) errors.push({ path: `${path}.${key}`, message: "缺少必填字段" });
+      // Object.hasOwn 而非 in:原型链继承属性不得顶替必填字段(自审 cand-13)
+      if (!Object.hasOwn(value, key)) errors.push({ path: `${path}.${key}`, message: "缺少必填字段" });
     }
     const props = schema.properties;
     if (props && typeof props === "object") {
@@ -156,11 +186,16 @@ export function validateAgainstSchema(doc: unknown, schemaPath: string): Validat
   const schema = loadSchema(schemaPath);
   const errors: ValidationError[] = [];
   validateNode(doc, schema, schema, "$", errors);
-  return errors.length === 0 ? { ok: true } : { ok: false, errors };
+  // 错误总量上限(自审 cand-12):病态产物不得淹没调用方上下文
+  const MAX_ERRORS = 100;
+  const limited = errors.length > MAX_ERRORS
+    ? errors.slice(0, MAX_ERRORS).concat([{ path: "$", message: `错误共 ${errors.length} 条,已截断至前 ${MAX_ERRORS} 条` }])
+    : errors;
+  return limited.length === 0 ? { ok: true } : { ok: false, errors: limited };
 }
 
 /** findings.json 契约校验(缺省 schema = 插件内 schemas/findings.schema.json) */
-function pluginSchemaPath(name: string): string {
+export function pluginSchemaPath(name: string): string {
   // 自审 cand-05:dirname 缺失显式失败,不信任 CWD(被扫仓库可预置同名 schema 冒充契约)
   const dir = import.meta.dirname;
   if (!dir) throw new SchemaLoadError("无法定位插件 schemas 目录(import.meta.dirname 不可用)");

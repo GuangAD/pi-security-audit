@@ -9,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Type } from "typebox";
 
-import { validateAgainstSchema } from "./artifact-validator.ts";
+import { pluginSchemaPath, validateAgainstSchema } from "./artifact-validator.ts";
 
 import { resolveScanModel } from "./scan-model.ts";
 
@@ -94,7 +94,7 @@ export function registerSecurityAudit(pi: PiSurface): void {
           isError: true,
         };
       }
-      const schemaPath = path.join(import.meta.dirname ?? ".", "..", "schemas", `${p.kind}.schema.json`);
+      const schemaPath = pluginSchemaPath(`${p.kind}.schema.json`); // 自审 cand-11:复用显式失败路径,不回退 CWD
       const r = validateAgainstSchema(doc, schemaPath);
       const text = r.ok
         ? `${p.kind} 产物契约校验通过。`

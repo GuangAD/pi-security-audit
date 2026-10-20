@@ -109,3 +109,11 @@ test('守卫 cand-04:不可读(目录/EISDIR 等非 ENOENT)→ corrupt,不静默
   assert.equal(r.ok, false, '非 ENOENT 读错误必须显式报错');
   if (!r.ok) assert.equal(r.reason, 'config-corrupt');
 });
+
+test('守卫 cand-14:超长 model 值在错误消息中被截断', () => {
+  const dir = tmpDir();
+  const p = writeConfig(dir, JSON.stringify({ model: 'X'.repeat(5000) }));
+  const r = resolveScanModel(p, SESSION);
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.ok(r.reason.length < 300, 'reason 必须截断');
+});
